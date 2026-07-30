@@ -11,7 +11,7 @@ import {
   OrganizationSettings, 
   UserSession 
 } from '../../types';
-import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText } from 'lucide-react';
+import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X } from 'lucide-react';
 import { fetchCbrRates, CbrValute, POPULAR_CBR_CURRENCIES } from '../../services/cbrRates';
 import { 
   generateDecorFilePath, 
@@ -94,6 +94,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newMfgCountry, setNewMfgCountry] = useState('');
   const [newMfgNote, setNewMfgNote] = useState('');
   const [newMfgExt, setNewMfgExt] = useState('png');
+  const [newMfgLogoPreview, setNewMfgLogoPreview] = useState<string>('');
+  const [newMfgLogoFileName, setNewMfgLogoFileName] = useState<string>('');
+
+  const handleMfgLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      setNewMfgExt(ext);
+      setNewMfgLogoFileName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewMfgLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleClearMfgLogo = () => {
+    setNewMfgLogoPreview('');
+    setNewMfgLogoFileName('');
+    setNewMfgExt('png');
+  };
 
   // Decor form state
   const [newDecorMfgId, setNewDecorMfgId] = useState<number>(manufacturers[0]?.id || 1);
@@ -135,7 +157,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleAddMfgSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMfgName.trim()) return;
-    const logoPath = generateManufacturerFilePath(newMfgName, newMfgExt);
+    const logoPath = newMfgLogoPreview || generateManufacturerFilePath(newMfgName, newMfgExt);
     onAddManufacturer({
       fullName: newMfgName,
       countryOrigin: newMfgCountry || 'Не указана',
@@ -145,6 +167,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setNewMfgName('');
     setNewMfgCountry('');
     setNewMfgNote('');
+    setNewMfgLogoPreview('');
+    setNewMfgLogoFileName('');
+    setNewMfgExt('png');
   };
 
   // Decors Submit
@@ -429,7 +454,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Справочник производителей HPL</h2>
-              <p className="text-xs text-slate-500">Файлы логотипов сохраняются в <code>/uploads/manufacturers</code> с именем: <strong>Название производителя</strong></p>
+              <p className="text-xs text-slate-500">Загружаемые логотипы сохраняются в системе и ассоциируются с производителем</p>
             </div>
           </div>
           
@@ -457,55 +482,99 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Формат логотипа</label>
-                <select
-                  value={newMfgExt}
-                  onChange={(e) => setNewMfgExt(e.target.value)}
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white"
-                >
-                  <option value="png">PNG (.png)</option>
-                  <option value="jpg">JPG (.jpg)</option>
-                  <option value="svg">SVG (.svg)</option>
-                  <option value="webp">WEBP (.webp)</option>
-                </select>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Логотип бренда</label>
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-2 border border-dashed border-slate-300 hover:border-blue-400 rounded-lg px-3 py-2 bg-white hover:bg-slate-100/80 cursor-pointer transition text-xs font-semibold text-slate-700">
+                    <Upload className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <span className="truncate">{newMfgLogoFileName || 'Выбрать файл логотипа'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleMfgLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {newMfgLogoPreview && (
+                    <button
+                      type="button"
+                      onClick={handleClearMfgLogo}
+                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition"
+                      title="Удалить выбранный логотип"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Generated File Path Preview */}
-            <div className="bg-blue-50/80 border border-blue-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-blue-900 font-medium">
-                <ImageIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <span>Имя файла логотипа:</span>
-                <code className="font-mono bg-white px-2 py-0.5 rounded border border-blue-200 font-bold text-blue-700">
-                  {generateManufacturerFilePath(newMfgName || 'Производитель', newMfgExt)}
-                </code>
+            {/* Upload & Path Info */}
+            <div className="bg-blue-50/80 border border-blue-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                {newMfgLogoPreview ? (
+                  <div className="w-10 h-10 rounded-lg bg-white border border-blue-200 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img src={newMfgLogoPreview} alt="Preview" className="max-h-full max-w-full object-contain" />
+                  </div>
+                ) : (
+                  <ImageIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                )}
+                <div className="space-y-0.5">
+                  <div className="text-blue-950 font-medium">
+                    {newMfgLogoPreview ? 'Выбранный логотип готов к сохранению' : 'Системное имя файла:'}
+                  </div>
+                  <code className="font-mono bg-white px-2 py-0.5 rounded border border-blue-200 font-bold text-blue-700 block truncate max-w-md">
+                    {generateManufacturerFilePath(newMfgName || 'Производитель', newMfgExt)}
+                  </code>
+                </div>
               </div>
-              <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2 rounded-lg shadow">
+              <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow whitespace-nowrap">
                 Добавить бренда
               </button>
             </div>
           </form>
 
+          {/* Manufacturers Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {manufacturers.map(m => (
-              <div key={m.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-2">
-                <div className="flex items-start justify-between">
+              <div key={m.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3">
+                <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-sm font-bold text-slate-900">{m.fullName}</div>
-                    <div className="text-xs text-slate-500">{m.countryOrigin}</div>
+                    <div className="text-xs text-slate-500 font-medium">{m.countryOrigin}</div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => onDeleteManufacturer(m.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded transition"
+                    title="Удалить производителя"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                {m.logoPath && (
-                  <div className="text-[11px] font-mono text-slate-500 bg-white p-1.5 rounded border border-slate-200 truncate" title={m.logoPath}>
-                    {m.logoPath}
+
+                {/* Logo Graphic Container */}
+                <div className="h-16 w-full bg-white rounded-lg p-2 border border-slate-200/90 flex items-center justify-center overflow-hidden shadow-inner">
+                  {m.logoPath ? (
+                    <img
+                      src={m.logoPath}
+                      alt={m.fullName}
+                      className="max-h-full max-w-full object-contain"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.style.display = 'none';
+                        const sibling = target.nextElementSibling as HTMLElement | null;
+                        if (sibling) sibling.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className="hidden items-center justify-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider"
+                    style={{ display: !m.logoPath ? 'flex' : 'none' }}
+                  >
+                    <ImageIcon className="w-4 h-4 text-slate-300" />
+                    <span>{m.fullName}</span>
                   </div>
-                )}
+                </div>
               </div>
             ))}
           </div>
