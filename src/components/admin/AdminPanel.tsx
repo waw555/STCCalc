@@ -914,92 +914,81 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
           <div className="border-b border-slate-100 pb-3">
             <h2 className="text-lg font-bold text-slate-900">Справочник тиснений HPL</h2>
-            <p className="text-xs text-slate-500">Файлы тиснений сохраняются в <code>/uploads/embossings</code> с именем: <strong>Название производителя_Название тиснения</strong></p>
+            <p className="text-xs text-slate-500">Справочник доступных структур и тиснений поверхности HPL пластиков</p>
           </div>
 
-          <form onSubmit={handleAddEmbossingSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
+          <form onSubmit={handleAddEmbossingSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+              <div className="md:col-span-4">
                 <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
                 <select
                   value={newEmbossingMfgId}
                   onChange={(e) => setNewEmbossingMfgId(Number(e.target.value))}
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {manufacturers.map(m => (
                     <option key={m.id} value={m.id}>{m.fullName}</option>
                   ))}
                 </select>
               </div>
-              <div>
+              <div className="md:col-span-4">
                 <label className="block text-xs font-bold text-slate-700 mb-1">Название тиснения</label>
                 <input
                   type="text"
                   value={newEmbossingName}
                   onChange={(e) => setNewEmbossingName(e.target.value)}
                   placeholder="Например, Canyon"
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Короткий код (2-3 буквы)</label>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1">Короткий код</label>
                 <input
                   type="text"
                   value={newEmbossingShortName}
                   onChange={(e) => setNewEmbossingShortName(e.target.value)}
                   placeholder="Например, CN"
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow transition flex items-center justify-center gap-1.5 min-h-[36px]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить</span>
+                </button>
+              </div>
             </div>
-
-            {/* Path Calculator */}
-            {(() => {
-              const mfgObj = manufacturers.find(m => m.id === newEmbossingMfgId) || manufacturers[0];
-              const path = generateEmbossingFilePath(mfgObj?.fullName || 'Manufacturer', newEmbossingName || 'EmbossingName', newEmbossingExt);
-              return (
-                <div className="bg-indigo-50/80 border border-indigo-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-indigo-900 font-medium">
-                    <ImageIcon className="w-4 h-4 text-indigo-600 flex-shrink-0" />
-                    <span>Сгенерированный путь файла:</span>
-                    <code className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-300 font-bold text-indigo-800">
-                      {path}
-                    </code>
-                  </div>
-                  <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow whitespace-nowrap">
-                    Добавить тиснение
-                  </button>
-                </div>
-              );
-            })()}
           </form>
 
           {/* List of Embossings */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {embossings.map(emb => {
               const mfg = manufacturers.find(m => m.id === emb.manufacturerId);
               return (
-                <div key={emb.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
+                <div key={emb.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between space-y-2 text-xs hover:border-slate-300 transition">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className="font-bold text-slate-900">{emb.name}</span>
-                      <span className="text-slate-500 text-[11px] ml-1 font-semibold">({emb.shortName})</span>
+                      <div className="font-bold text-slate-900 text-sm">{emb.name}</div>
+                      <div className="text-slate-500 text-xs font-semibold">Код: <span className="text-blue-700 font-mono">{emb.shortName}</span></div>
                     </div>
                     {onDeleteEmbossing && (
                       <button
+                        type="button"
                         onClick={() => onDeleteEmbossing(emb.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                        title="Удалить тиснение"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-500">Производитель: {mfg?.fullName || 'Gentas'}</div>
-                  {emb.imagePath && (
-                    <div className="font-mono text-[10px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 truncate" title={emb.imagePath}>
-                      {emb.imagePath}
-                    </div>
-                  )}
+                  <div className="text-[11px] font-medium text-slate-500 pt-1 border-t border-slate-200/80 flex items-center justify-between">
+                    <span>Бренд:</span>
+                    <span className="font-semibold text-slate-700">{mfg?.fullName || 'Gentas'}</span>
+                  </div>
                 </div>
               );
             })}
