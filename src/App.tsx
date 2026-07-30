@@ -153,6 +153,10 @@ export const App: React.FC = () => {
     setEmbossings(prev => [...prev, { id: Date.now(), ...emb }]);
   };
 
+  const handleUpdateEmbossing = (updated: Embossing) => {
+    setEmbossings(prev => prev.map(e => e.id === updated.id ? updated : e));
+  };
+
   const handleDeleteEmbossing = (id: number) => {
     setEmbossings(prev => prev.filter(e => e.id !== id));
   };
@@ -281,6 +285,7 @@ export const App: React.FC = () => {
             onDeleteDecor={handleDeleteDecor}
             embossings={embossings}
             onAddEmbossing={handleAddEmbossing}
+            onUpdateEmbossing={handleUpdateEmbossing}
             onDeleteEmbossing={handleDeleteEmbossing}
             services={services}
             onAddService={handleAddService}

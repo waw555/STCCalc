@@ -40,6 +40,7 @@ interface AdminPanelProps {
   onDeleteDecor: (id: number) => void;
   embossings: Embossing[];
   onAddEmbossing: (emb: Omit<Embossing, 'id'>) => void;
+  onUpdateEmbossing?: (emb: Embossing) => void;
   onDeleteEmbossing?: (id: number) => void;
   services: Service[];
   onAddService: (srv: Omit<Service, 'id'>) => void;
@@ -70,6 +71,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteDecor,
   embossings,
   onAddEmbossing,
+  onUpdateEmbossing,
   onDeleteEmbossing,
   services,
   onAddService,
@@ -193,6 +195,77 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newEmbossingName, setNewEmbossingName] = useState('');
   const [newEmbossingShortName, setNewEmbossingShortName] = useState('');
   const [newEmbossingExt, setNewEmbossingExt] = useState('jpg');
+  const [newEmbossingImagePreview, setNewEmbossingImagePreview] = useState('');
+  const [newEmbossingImageFileName, setNewEmbossingImageFileName] = useState('');
+
+  const handleEmbossingImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setNewEmbossingImageFileName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewEmbossingImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleClearEmbossingImage = () => {
+    setNewEmbossingImagePreview('');
+    setNewEmbossingImageFileName('');
+  };
+
+  // Embossing edit state
+  const [editingEmbossingId, setEditingEmbossingId] = useState<number | null>(null);
+  const [editEmbossingName, setEditEmbossingName] = useState('');
+  const [editEmbossingShortName, setEditEmbossingShortName] = useState('');
+  const [editEmbossingMfgId, setEditEmbossingMfgId] = useState<number>(1);
+  const [editEmbossingImagePreview, setEditEmbossingImagePreview] = useState('');
+  const [editEmbossingImageFileName, setEditEmbossingImageFileName] = useState('');
+
+  const handleStartEditEmbossing = (emb: Embossing) => {
+    setEditingEmbossingId(emb.id);
+    setEditEmbossingName(emb.name);
+    setEditEmbossingShortName(emb.shortName || '');
+    setEditEmbossingMfgId(emb.manufacturerId || manufacturers[0]?.id || 1);
+    setEditEmbossingImagePreview(emb.imagePath || '');
+    setEditEmbossingImageFileName('');
+  };
+
+  const handleCancelEditEmbossing = () => {
+    setEditingEmbossingId(null);
+    setEditEmbossingName('');
+    setEditEmbossingShortName('');
+    setEditEmbossingMfgId(manufacturers[0]?.id || 1);
+    setEditEmbossingImagePreview('');
+    setEditEmbossingImageFileName('');
+  };
+
+  const handleEditEmbossingImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setEditEmbossingImageFileName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditEmbossingImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveEditEmbossing = (emb: Embossing) => {
+    if (!editEmbossingName.trim()) return;
+    if (onUpdateEmbossing) {
+      onUpdateEmbossing({
+        ...emb,
+        name: editEmbossingName.trim(),
+        shortName: editEmbossingShortName.trim() || editEmbossingName.trim().slice(0, 3).toUpperCase(),
+        manufacturerId: editEmbossingMfgId,
+        imagePath: editEmbossingImagePreview || emb.imagePath,
+      });
+    }
+    handleCancelEditEmbossing();
+  };
 
   // Service form state
   const [newServiceName, setNewServiceName] = useState('');
@@ -338,11 +411,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!newEmbossingName.trim()) return;
     const mfgObj = manufacturers.find(m => m.id === newEmbossingMfgId) || manufacturers[0];
     const mfgName = mfgObj?.fullName || 'Manufacturer';
-    const imagePath = generateEmbossingFilePath(mfgName, newEmbossingName, newEmbossingExt);
+    const imagePath = newEmbossingImagePreview || generateEmbossingFilePath(mfgName, newEmbossingName, newEmbossingExt);
 
     onAddEmbossing({
-      name: newEmbossingName,
-      shortName: newEmbossingShortName || newEmbossingName.slice(0, 3).toUpperCase(),
+      name: newEmbossingName.trim(),
+      shortName: newEmbossingShortName.trim() || newEmbossingName.trim().slice(0, 3).toUpperCase(),
       manufacturerId: newEmbossingMfgId,
       imagePath: imagePath,
       isActive: true,
@@ -350,6 +423,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     });
     setNewEmbossingName('');
     setNewEmbossingShortName('');
+    setNewEmbossingImagePreview('');
+    setNewEmbossingImageFileName('');
   };
 
   // Services Submit
@@ -913,13 +988,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {adminTab === 'embossings' && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
           <div className="border-b border-slate-100 pb-3">
-            <h2 className="text-lg font-bold text-slate-900">Справочник тиснений HPL</h2>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Grid className="w-5 h-5 text-blue-600" />
+              <span>Справочник тиснений HPL</span>
+            </h2>
             <p className="text-xs text-slate-500">Справочник доступных структур и тиснений поверхности HPL пластиков</p>
           </div>
 
           <form onSubmit={handleAddEmbossingSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-              <div className="md:col-span-4">
+              <div className="md:col-span-3">
                 <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
                 <select
                   value={newEmbossingMfgId}
@@ -931,7 +1009,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ))}
                 </select>
               </div>
-              <div className="md:col-span-4">
+              <div className="md:col-span-3">
                 <label className="block text-xs font-bold text-slate-700 mb-1">Название тиснения</label>
                 <input
                   type="text"
@@ -948,8 +1026,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   value={newEmbossingShortName}
                   onChange={(e) => setNewEmbossingShortName(e.target.value)}
                   placeholder="Например, CN"
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1">Фото тиснения</label>
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-1.5 border border-dashed border-slate-300 hover:border-blue-400 rounded-lg px-2 py-2 bg-white cursor-pointer transition text-[11px] font-semibold text-slate-700">
+                    <Upload className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                    <span className="truncate">{newEmbossingImageFileName || 'Загрузить'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEmbossingImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {newEmbossingImagePreview && (
+                    <div className="relative group flex-shrink-0">
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center overflow-hidden">
+                        <img src={newEmbossingImagePreview} alt="Preview" className="max-h-full max-w-full object-contain" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearEmbossingImage}
+                        className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 shadow hover:bg-rose-600 transition"
+                        title="Удалить"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="md:col-span-2">
                 <button
@@ -963,28 +1071,146 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </form>
 
-          {/* List of Embossings */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* List of Embossings Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {embossings.map(emb => {
               const mfg = manufacturers.find(m => m.id === emb.manufacturerId);
+              const isEditing = editingEmbossingId === emb.id;
+
+              if (isEditing) {
+                return (
+                  <div key={emb.id} className="bg-blue-50/70 border-2 border-blue-500 rounded-xl p-4 space-y-3 shadow-md">
+                    <div className="flex items-center justify-between pb-2 border-b border-blue-200">
+                      <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">Редактирование</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEditEmbossing(emb)}
+                          title="Сохранить изменения"
+                          className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow flex items-center gap-1 text-xs font-semibold px-2"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Сохранить</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEditEmbossing}
+                          title="Отмена"
+                          className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Производитель</label>
+                        <select
+                          value={editEmbossingMfgId}
+                          onChange={(e) => setEditEmbossingMfgId(Number(e.target.value))}
+                          className="w-full font-bold border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {manufacturers.map(m => (
+                            <option key={m.id} value={m.id}>{m.fullName}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Название тиснения</label>
+                        <input
+                          type="text"
+                          value={editEmbossingName}
+                          onChange={(e) => setEditEmbossingName(e.target.value)}
+                          className="w-full font-bold border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Короткий код</label>
+                        <input
+                          type="text"
+                          value={editEmbossingShortName}
+                          onChange={(e) => setEditEmbossingShortName(e.target.value)}
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Заменить фото</label>
+                        <div className="flex items-center gap-2">
+                          <label className="flex-1 flex items-center justify-center gap-1.5 border border-dashed border-slate-300 hover:border-blue-400 rounded-lg px-2 py-1.5 bg-white cursor-pointer transition text-[11px] font-semibold text-slate-700">
+                            <Upload className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                            <span className="truncate">{editEmbossingImageFileName || 'Загрузить новое'}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleEditEmbossingImageUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          {editEmbossingImagePreview && (
+                            <div className="w-8 h-8 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              <img src={editEmbossingImagePreview} alt="Preview" className="max-h-full max-w-full object-contain" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
-                <div key={emb.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between space-y-2 text-xs hover:border-slate-300 transition">
+                <div key={emb.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3 hover:border-slate-300 transition">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="font-bold text-slate-900 text-sm">{emb.name}</div>
                       <div className="text-slate-500 text-xs font-semibold">Код: <span className="text-blue-700 font-mono">{emb.shortName}</span></div>
                     </div>
-                    {onDeleteEmbossing && (
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => onDeleteEmbossing(emb.id)}
-                        title="Удалить тиснение"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        onClick={() => handleStartEditEmbossing(emb)}
+                        title="Редактировать тиснение"
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Pencil className="w-4 h-4" />
                       </button>
-                    )}
+                      {onDeleteEmbossing && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteEmbossing(emb.id)}
+                          title="Удалить тиснение"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Photo Graphic Container */}
+                  <div className="h-24 w-full bg-white rounded-lg p-2 border border-slate-200/90 flex items-center justify-center overflow-hidden shadow-inner relative group">
+                    {emb.imagePath ? (
+                      <img
+                        src={emb.imagePath}
+                        alt={emb.name}
+                        className="max-h-full max-w-full object-contain transition group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.emboss-fallback');
+                            if (fallback) fallback.classList.remove('hidden');
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <div className={`emboss-fallback flex flex-col items-center justify-center text-slate-400 text-xs font-semibold gap-1 ${emb.imagePath ? 'hidden' : ''}`}>
+                      <Grid className="w-6 h-6 text-slate-400 stroke-[1.5]" />
+                      <span className="text-[10px] text-slate-500 font-mono font-bold">{emb.shortName || emb.name}</span>
+                    </div>
+                  </div>
+
                   <div className="text-[11px] font-medium text-slate-500 pt-1 border-t border-slate-200/80 flex items-center justify-between">
                     <span>Бренд:</span>
                     <span className="font-semibold text-slate-700">{mfg?.fullName || 'Gentas'}</span>
