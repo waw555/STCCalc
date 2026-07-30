@@ -146,8 +146,16 @@ export const App: React.FC = () => {
     setEmbossings(prev => [...prev, { id: Date.now(), ...emb }]);
   };
 
+  const handleDeleteEmbossing = (id: number) => {
+    setEmbossings(prev => prev.filter(e => e.id !== id));
+  };
+
   const handleAddService = (srv: Omit<Service, 'id'>) => {
     setServices(prev => [...prev, { id: Date.now(), ...srv }]);
+  };
+
+  const handleDeleteService = (id: number) => {
+    setServices(prev => prev.filter(s => s.id !== id));
   };
 
   return (
@@ -248,8 +256,10 @@ export const App: React.FC = () => {
             onDeleteDecor={handleDeleteDecor}
             embossings={embossings}
             onAddEmbossing={handleAddEmbossing}
+            onDeleteEmbossing={handleDeleteEmbossing}
             services={services}
             onAddService={handleAddService}
+            onDeleteService={handleDeleteService}
             suppliers={suppliers}
             organization={organization}
             onUpdateOrganization={setOrganization}

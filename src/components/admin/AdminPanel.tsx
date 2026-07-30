@@ -11,8 +11,16 @@ import {
   OrganizationSettings, 
   UserSession 
 } from '../../types';
-import { Settings, DollarSign, Building2, Layers, Grid, Sliders, Truck, ShieldAlert, Plus, Trash2, Check, Save, Globe } from 'lucide-react';
+import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText } from 'lucide-react';
 import { fetchCbrRates, CbrValute, POPULAR_CBR_CURRENCIES } from '../../services/cbrRates';
+import { 
+  generateDecorFilePath, 
+  generateEmbossingFilePath, 
+  generateManufacturerFilePath, 
+  generateOrganizationFilePath, 
+  generateServiceFilePath,
+  transliterateToEnglish
+} from '../../utils/fileNaming';
 
 interface AdminPanelProps {
   userSession: UserSession;
@@ -30,8 +38,10 @@ interface AdminPanelProps {
   onDeleteDecor: (id: number) => void;
   embossings: Embossing[];
   onAddEmbossing: (emb: Omit<Embossing, 'id'>) => void;
+  onDeleteEmbossing?: (id: number) => void;
   services: Service[];
   onAddService: (srv: Omit<Service, 'id'>) => void;
+  onDeleteService?: (id: number) => void;
   suppliers: Supplier[];
   organization: OrganizationSettings;
   onUpdateOrganization: (org: OrganizationSettings) => void;
@@ -53,8 +63,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteDecor,
   embossings,
   onAddEmbossing,
+  onDeleteEmbossing,
   services,
   onAddService,
+  onDeleteService,
   suppliers,
   organization,
   onUpdateOrganization,
@@ -77,15 +89,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }).catch(err => console.warn('Admin CBR fetch error:', err));
   }, []);
 
-  // Form states
+  // Manufacturer form state
   const [newMfgName, setNewMfgName] = useState('');
   const [newMfgCountry, setNewMfgCountry] = useState('');
+  const [newMfgNote, setNewMfgNote] = useState('');
+  const [newMfgExt, setNewMfgExt] = useState('png');
 
+  // Decor form state
+  const [newDecorMfgId, setNewDecorMfgId] = useState<number>(manufacturers[0]?.id || 1);
   const [newDecorName, setNewDecorName] = useState('');
   const [newDecorNumber, setNewDecorNumber] = useState('');
   const [newDecorCost, setNewDecorCost] = useState<number>(60);
   const [newDecorMarkup, setNewDecorMarkup] = useState<number>(46.5);
+  const [newDecorExt, setNewDecorExt] = useState('jpg');
 
+  // Embossing form state
+  const [newEmbossingMfgId, setNewEmbossingMfgId] = useState<number>(manufacturers[0]?.id || 1);
+  const [newEmbossingName, setNewEmbossingName] = useState('');
+  const [newEmbossingShortName, setNewEmbossingShortName] = useState('');
+  const [newEmbossingExt, setNewEmbossingExt] = useState('jpg');
+
+  // Service form state
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceUnit, setNewServiceUnit] = useState('м.п.');
+  const [newServicePrice, setNewServicePrice] = useState<number>(300);
+  const [newServiceExt, setNewServiceExt] = useState('jpg');
+
+  // Org form state
   const [orgState, setOrgState] = useState<OrganizationSettings>(organization);
   const [orgSaveMessage, setOrgSaveMessage] = useState<string | null>(null);
 
@@ -101,30 +131,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }
 
+  // Manufacturers Submit
   const handleAddMfgSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMfgName.trim()) return;
+    const logoPath = generateManufacturerFilePath(newMfgName, newMfgExt);
     onAddManufacturer({
       fullName: newMfgName,
       countryOrigin: newMfgCountry || 'Не указана',
+      logoPath: logoPath,
+      note: newMfgNote || 'Производитель HPL/компакт-плит',
     });
     setNewMfgName('');
     setNewMfgCountry('');
+    setNewMfgNote('');
   };
 
+  // Decors Submit
   const handleAddDecorSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDecorName.trim()) return;
+    const mfgObj = manufacturers.find(m => m.id === newDecorMfgId) || manufacturers[0];
+    const mfgName = mfgObj?.fullName || 'Manufacturer';
+    const decorPath = generateDecorFilePath(mfgName, newDecorNumber || '000', newDecorName, newDecorExt);
+
     onAddDecor({
-      name: newDecorName,
+      name: `${mfgName} ${newDecorNumber} ${newDecorName}`.trim(),
       decorName: newDecorName,
       decorNumber: newDecorNumber || '100',
+      manufacturerId: newDecorMfgId,
       widthMm: 1300,
       heightMm: 3050,
       thicknessMm: 12,
       cost: newDecorCost,
       markup: newDecorMarkup,
       currency: 'EUR',
+      decorPhotoPath: decorPath,
       isStockDecor: true,
       isStockProgram: true,
       isActive: true,
@@ -133,10 +175,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setNewDecorNumber('');
   };
 
+  // Embossings Submit
+  const handleAddEmbossingSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmbossingName.trim()) return;
+    const mfgObj = manufacturers.find(m => m.id === newEmbossingMfgId) || manufacturers[0];
+    const mfgName = mfgObj?.fullName || 'Manufacturer';
+    const imagePath = generateEmbossingFilePath(mfgName, newEmbossingName, newEmbossingExt);
+
+    onAddEmbossing({
+      name: newEmbossingName,
+      shortName: newEmbossingShortName || newEmbossingName.slice(0, 3).toUpperCase(),
+      manufacturerId: newEmbossingMfgId,
+      imagePath: imagePath,
+      isActive: true,
+      isStockProgram: true,
+    });
+    setNewEmbossingName('');
+    setNewEmbossingShortName('');
+  };
+
+  // Services Submit
+  const handleAddServiceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newServiceName.trim()) return;
+    const photoPath = generateServiceFilePath(newServiceName, newServiceExt);
+    onAddService({
+      name: newServiceName,
+      unit: newServiceUnit,
+      price: newServicePrice,
+      currency: 'RUB',
+      photoPath: photoPath,
+    });
+    setNewServiceName('');
+    setNewServicePrice(300);
+  };
+
+  // Org Submit
   const handleOrgSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateOrganization(orgState);
-    setOrgSaveMessage('Реквизиты организации успешно сохранены!');
+    const updatedLogoPath = generateOrganizationFilePath(orgState.fullName, 'png');
+    const updated = { ...orgState, logoPath: updatedLogoPath };
+    onUpdateOrganization(updated);
+    setOrgState(updated);
+    setOrgSaveMessage('Реквизиты организации и путь к логотипу успешно сохранены!');
     setTimeout(() => setOrgSaveMessage(null), 3000);
   };
 
@@ -151,7 +233,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/80 border border-amber-800/80 px-2.5 py-0.5 rounded-full">
                 Администрирование
               </span>
-              <span className="text-xs text-slate-400">Управление справочниками и тарифами</span>
+              <span className="text-xs text-slate-400">Управление справочниками, файлами и курсами</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               Панель администратора
@@ -164,7 +246,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="flex space-x-2 border-b border-slate-200 overflow-x-auto pb-2">
         <button
           onClick={() => setAdminTab('currencies')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
             adminTab === 'currencies' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
           }`}
         >
@@ -172,7 +254,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </button>
         <button
           onClick={() => setAdminTab('mfg')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
             adminTab === 'mfg' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
           }`}
         >
@@ -180,15 +262,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </button>
         <button
           onClick={() => setAdminTab('decors')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
             adminTab === 'decors' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
           }`}
         >
           <Grid className="w-4 h-4" /> Декоры и форматы
         </button>
         <button
+          onClick={() => setAdminTab('embossings')}
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+            adminTab === 'embossings' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          <Layers className="w-4 h-4" /> Тиснения
+        </button>
+        <button
           onClick={() => setAdminTab('services')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
             adminTab === 'services' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
           }`}
         >
@@ -196,7 +286,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </button>
         <button
           onClick={() => setAdminTab('org')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
             adminTab === 'org' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
           }`}
         >
@@ -336,42 +426,86 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* Manufacturers Tab */}
       {adminTab === 'mfg' && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
-          <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">Справочник производителей HPL</h2>
+          <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Справочник производителей HPL</h2>
+              <p className="text-xs text-slate-500">Файлы логотипов сохраняются в <code>/uploads/manufacturers</code> с именем: <strong>Название производителя</strong></p>
+            </div>
+          </div>
           
           {/* Form */}
-          <form onSubmit={handleAddMfgSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              placeholder="Название бренда (например, Arpa)"
-              value={newMfgName}
-              onChange={(e) => setNewMfgName(e.target.value)}
-              className="flex-1 text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none"
-            />
-            <input
-              type="text"
-              placeholder="Страна происхождения (например, Италия)"
-              value={newMfgCountry}
-              onChange={(e) => setNewMfgCountry(e.target.value)}
-              className="flex-1 text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none"
-            />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2 rounded-lg shadow">
-              Добавить
-            </button>
+          <form onSubmit={handleAddMfgSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Название бренда</label>
+                <input
+                  type="text"
+                  placeholder="Например, Arpa"
+                  value={newMfgName}
+                  onChange={(e) => setNewMfgName(e.target.value)}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Страна происхождения</label>
+                <input
+                  type="text"
+                  placeholder="Например, Италия"
+                  value={newMfgCountry}
+                  onChange={(e) => setNewMfgCountry(e.target.value)}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Формат логотипа</label>
+                <select
+                  value={newMfgExt}
+                  onChange={(e) => setNewMfgExt(e.target.value)}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white"
+                >
+                  <option value="png">PNG (.png)</option>
+                  <option value="jpg">JPG (.jpg)</option>
+                  <option value="svg">SVG (.svg)</option>
+                  <option value="webp">WEBP (.webp)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Generated File Path Preview */}
+            <div className="bg-blue-50/80 border border-blue-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-blue-900 font-medium">
+                <ImageIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <span>Имя файла логотипа:</span>
+                <code className="font-mono bg-white px-2 py-0.5 rounded border border-blue-200 font-bold text-blue-700">
+                  {generateManufacturerFilePath(newMfgName || 'Производитель', newMfgExt)}
+                </code>
+              </div>
+              <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2 rounded-lg shadow">
+                Добавить бренда
+              </button>
+            </div>
           </form>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {manufacturers.map(m => (
-              <div key={m.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-bold text-slate-900">{m.fullName}</div>
-                  <div className="text-xs text-slate-500">{m.countryOrigin}</div>
+              <div key={m.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-2">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">{m.fullName}</div>
+                    <div className="text-xs text-slate-500">{m.countryOrigin}</div>
+                  </div>
+                  <button
+                    onClick={() => onDeleteManufacturer(m.id)}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded transition"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => onDeleteManufacturer(m.id)}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded transition"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {m.logoPath && (
+                  <div className="text-[11px] font-mono text-slate-500 bg-white p-1.5 rounded border border-slate-200 truncate" title={m.logoPath}>
+                    {m.logoPath}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -381,51 +515,305 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* Decors Tab */}
       {adminTab === 'decors' && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
-          <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">Добавить новый декор HPL</h2>
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-lg font-bold text-slate-900">Добавить новый декор HPL</h2>
+            <p className="text-xs text-slate-500">Файлы декоров сохраняются в <code>/uploads/decors</code> с именем: <strong>Название производителя_Номер декора_Название декора</strong></p>
+          </div>
           
-          <form onSubmit={handleAddDecorSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Артикул декора</label>
-              <input
-                type="text"
-                value={newDecorNumber}
-                onChange={(e) => setNewDecorNumber(e.target.value)}
-                placeholder="Например, 4012"
-                className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2"
-              />
+          <form onSubmit={handleAddDecorSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
+                <select
+                  value={newDecorMfgId}
+                  onChange={(e) => setNewDecorMfgId(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                >
+                  {manufacturers.map(m => (
+                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Артикул / Номер декора</label>
+                <input
+                  type="text"
+                  value={newDecorNumber}
+                  onChange={(e) => setNewDecorNumber(e.target.value)}
+                  placeholder="Например, 4012"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Название декора</label>
+                <input
+                  type="text"
+                  value={newDecorName}
+                  onChange={(e) => setNewDecorName(e.target.value)}
+                  placeholder="Например, Marble Carrara"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Базовая цена (€/м²)</label>
+                <input
+                  type="number"
+                  value={newDecorCost}
+                  onChange={(e) => setNewDecorCost(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Наименование</label>
-              <input
-                type="text"
-                value={newDecorName}
-                onChange={(e) => setNewDecorName(e.target.value)}
-                placeholder="Marble Carrara"
-                className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Базовая цена (€/м²)</label>
-              <input
-                type="number"
-                value={newDecorCost}
-                onChange={(e) => setNewDecorCost(Number(e.target.value))}
-                className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2"
-              />
-            </div>
-            <div className="flex items-end">
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow">
-                Сохранить декор
-              </button>
-            </div>
+
+            {/* Path Calculator Banner */}
+            {(() => {
+              const mfgObj = manufacturers.find(m => m.id === newDecorMfgId) || manufacturers[0];
+              const path = generateDecorFilePath(mfgObj?.fullName || 'Manufacturer', newDecorNumber || '000', newDecorName || 'DecorName', newDecorExt);
+              return (
+                <div className="bg-emerald-50/90 border border-emerald-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-emerald-900 font-medium">
+                    <ImageIcon className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>Сгенерированный путь файла:</span>
+                    <code className="font-mono bg-white px-2 py-0.5 rounded border border-emerald-300 font-bold text-emerald-800">
+                      {path}
+                    </code>
+                  </div>
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow whitespace-nowrap">
+                    Сохранить декор
+                  </button>
+                </div>
+              );
+            })()}
           </form>
+
+          {/* List of Decors */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Все декоры в системе ({decors.length})</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {decors.map(d => {
+                const mfg = manufacturers.find(m => m.id === d.manufacturerId);
+                return (
+                  <div key={d.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-2 text-xs">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-bold text-slate-900">{d.name}</div>
+                        <div className="text-slate-500 text-[11px]">{mfg?.fullName} | № {d.decorNumber} | {d.cost} €/м²</div>
+                      </div>
+                      <button
+                        onClick={() => onDeleteDecor(d.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {d.decorPhotoPath && (
+                      <div className="font-mono text-[10px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 truncate" title={d.decorPhotoPath}>
+                        {d.decorPhotoPath}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Embossings Tab */}
+      {adminTab === 'embossings' && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-lg font-bold text-slate-900">Справочник тиснений HPL</h2>
+            <p className="text-xs text-slate-500">Файлы тиснений сохраняются в <code>/uploads/embossings</code> с именем: <strong>Название производителя_Название тиснения</strong></p>
+          </div>
+
+          <form onSubmit={handleAddEmbossingSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
+                <select
+                  value={newEmbossingMfgId}
+                  onChange={(e) => setNewEmbossingMfgId(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                >
+                  {manufacturers.map(m => (
+                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Название тиснения</label>
+                <input
+                  type="text"
+                  value={newEmbossingName}
+                  onChange={(e) => setNewEmbossingName(e.target.value)}
+                  placeholder="Например, Canyon"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Короткий код (2-3 буквы)</label>
+                <input
+                  type="text"
+                  value={newEmbossingShortName}
+                  onChange={(e) => setNewEmbossingShortName(e.target.value)}
+                  placeholder="Например, CN"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
+            </div>
+
+            {/* Path Calculator */}
+            {(() => {
+              const mfgObj = manufacturers.find(m => m.id === newEmbossingMfgId) || manufacturers[0];
+              const path = generateEmbossingFilePath(mfgObj?.fullName || 'Manufacturer', newEmbossingName || 'EmbossingName', newEmbossingExt);
+              return (
+                <div className="bg-indigo-50/80 border border-indigo-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-indigo-900 font-medium">
+                    <ImageIcon className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                    <span>Сгенерированный путь файла:</span>
+                    <code className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-300 font-bold text-indigo-800">
+                      {path}
+                    </code>
+                  </div>
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow whitespace-nowrap">
+                    Добавить тиснение
+                  </button>
+                </div>
+              );
+            })()}
+          </form>
+
+          {/* List of Embossings */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {embossings.map(emb => {
+              const mfg = manufacturers.find(m => m.id === emb.manufacturerId);
+              return (
+                <div key={emb.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-900">{emb.name}</span>
+                      <span className="text-slate-500 text-[11px] ml-1 font-semibold">({emb.shortName})</span>
+                    </div>
+                    {onDeleteEmbossing && (
+                      <button
+                        onClick={() => onDeleteEmbossing(emb.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500">Производитель: {mfg?.fullName || 'Gentas'}</div>
+                  {emb.imagePath && (
+                    <div className="font-mono text-[10px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 truncate" title={emb.imagePath}>
+                      {emb.imagePath}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Services Tab */}
+      {adminTab === 'services' && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-lg font-bold text-slate-900">Тарифы и стоимость обработки</h2>
+            <p className="text-xs text-slate-500">Файлы услуг сохраняются в <code>/uploads/services</code> с именем: <strong>Название услуги</strong></p>
+          </div>
+
+          <form onSubmit={handleAddServiceSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Наименование услуги</label>
+                <input
+                  type="text"
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  placeholder="Например, Прямой распил HPL панели"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Единица измерения</label>
+                <input
+                  type="text"
+                  value={newServiceUnit}
+                  onChange={(e) => setNewServiceUnit(e.target.value)}
+                  placeholder="м.п. / шт. / м²"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Цена (₽)</label>
+                <input
+                  type="number"
+                  value={newServicePrice}
+                  onChange={(e) => setNewServicePrice(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                />
+              </div>
+            </div>
+
+            {/* Path Calculator */}
+            {(() => {
+              const path = generateServiceFilePath(newServiceName || 'ServiceName', newServiceExt);
+              return (
+                <div className="bg-purple-50/80 border border-purple-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-purple-900 font-medium">
+                    <ImageIcon className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                    <span>Сгенерированный путь файла:</span>
+                    <code className="font-mono bg-white px-2 py-0.5 rounded border border-purple-300 font-bold text-purple-800">
+                      {path}
+                    </code>
+                  </div>
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow whitespace-nowrap">
+                    Добавить услугу
+                  </button>
+                </div>
+              );
+            })()}
+          </form>
+
+          {/* List of Services */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {services.map(srv => (
+              <div key={srv.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-bold text-slate-900">{srv.name}</div>
+                    <div className="text-slate-500 font-semibold">{srv.price} ₽ / {srv.unit}</div>
+                  </div>
+                  {onDeleteService && (
+                    <button
+                      onClick={() => onDeleteService(srv.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {srv.photoPath && (
+                  <div className="font-mono text-[10px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 truncate" title={srv.photoPath}>
+                    {srv.photoPath}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Org Tab */}
       {adminTab === 'org' && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
-          <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">Реквизиты организации</h2>
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-lg font-bold text-slate-900">Реквизиты организации</h2>
+            <p className="text-xs text-slate-500">Логотип сохраняется в <code>/uploads/organization</code> с именем: <strong>Название организации</strong></p>
+          </div>
           
           {orgSaveMessage && (
             <div className="bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs p-3 rounded-lg font-bold flex items-center gap-2">
@@ -440,7 +828,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 type="text"
                 value={orgState.fullName}
                 onChange={(e) => setOrgState({ ...orgState, fullName: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium"
+                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
               />
             </div>
             <div>
@@ -449,7 +837,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 type="text"
                 value={orgState.inn}
                 onChange={(e) => setOrgState({ ...orgState, inn: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium"
+                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
               />
             </div>
             <div>
@@ -458,7 +846,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 type="text"
                 value={orgState.phone}
                 onChange={(e) => setOrgState({ ...orgState, phone: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium"
+                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
               />
             </div>
             <div>
@@ -467,9 +855,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 type="text"
                 value={orgState.email}
                 onChange={(e) => setOrgState({ ...orgState, email: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium"
+                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
               />
             </div>
+
+            {/* Generated Logo Path Banner */}
+            <div className="sm:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-amber-900 font-medium">
+                <ImageIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>Сгенерированный путь файла логотипа:</span>
+                <code className="font-mono bg-white px-2 py-0.5 rounded border border-amber-300 font-bold text-amber-800">
+                  {generateOrganizationFilePath(orgState.fullName, 'png')}
+                </code>
+              </div>
+            </div>
+
             <div className="sm:col-span-2">
               <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-2">
                 <Save className="w-4 h-4" /> Сохранить изменения

@@ -19,19 +19,19 @@ export const initialCurrencies: Currency[] = [
 ];
 
 export const initialManufacturers: Manufacturer[] = [
-  { id: 1, fullName: 'Greenlam', countryOrigin: 'Индия', logoPath: '/uploads/manufacturers/293e806b3a19e07fb2736434.png', note: 'Компакт-плиты HPL премиум класса' },
-  { id: 2, fullName: 'Gentas', countryOrigin: 'Турция', logoPath: '/uploads/manufacturers/a9ba000c45cc87ddadb15915.png', note: 'Фасадные и интерьерные панели' },
-  { id: 3, fullName: 'Fundermax', countryOrigin: 'Австрия', logoPath: '/uploads/manufacturers/cabf99c73c774b9b3bdd830a.png', note: 'Австрийские влагостойкие панельные системы' },
-  { id: 4, fullName: 'Abet Laminati', countryOrigin: 'Италия', logoPath: '/uploads/manufacturers/fa54bee57ba878d1c8afbdf1.png', note: 'Итальянский пластик высочайшего качества' },
+  { id: 1, fullName: 'Greenlam', countryOrigin: 'Индия', logoPath: '/uploads/manufacturers/Greenlam.png', note: 'Компакт-плиты HPL премиум класса' },
+  { id: 2, fullName: 'Gentas', countryOrigin: 'Турция', logoPath: '/uploads/manufacturers/Gentas.png', note: 'Фасадные и интерьерные панели' },
+  { id: 3, fullName: 'Fundermax', countryOrigin: 'Австрия', logoPath: '/uploads/manufacturers/Fundermax.png', note: 'Австрийские влагостойкие панельные системы' },
+  { id: 4, fullName: 'Abet Laminati', countryOrigin: 'Италия', logoPath: '/uploads/manufacturers/Abet_Laminati.png', note: 'Итальянский пластик высочайшего качества' },
 ];
 
 export const initialEmbossings: Embossing[] = [
-  { id: 1, name: 'Canyon', shortName: 'CN', manufacturerId: 2, imagePath: '/uploads/embossings/Greenlam_RKR.jpg', isActive: true, isStockProgram: true },
-  { id: 2, name: 'Velur', shortName: 'VL', manufacturerId: 2, imagePath: '/uploads/embossings/Greenlam_SAT.jpg', isActive: true, isStockProgram: true },
-  { id: 3, name: 'SUD Wood', shortName: 'SUD', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_SUD.jpg', isActive: true, isStockProgram: true },
-  { id: 4, name: 'Quartz', shortName: 'QTZ', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_QTZ.jpg', isActive: true, isStockProgram: true },
-  { id: 5, name: 'Satin Light', shortName: 'SAN', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_SAN.jpg', isActive: true, isStockProgram: false },
-  { id: 6, name: 'Super Gloss', shortName: 'SGL', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_SGL.jpg', isActive: true, isStockProgram: false },
+  { id: 1, name: 'Canyon', shortName: 'CN', manufacturerId: 2, imagePath: '/uploads/embossings/Gentas_Canyon.jpg', isActive: true, isStockProgram: true },
+  { id: 2, name: 'Velur', shortName: 'VL', manufacturerId: 2, imagePath: '/uploads/embossings/Gentas_Velur.jpg', isActive: true, isStockProgram: true },
+  { id: 3, name: 'SUD Wood', shortName: 'SUD', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_SUD_Wood.jpg', isActive: true, isStockProgram: true },
+  { id: 4, name: 'Quartz', shortName: 'QTZ', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_Quartz.jpg', isActive: true, isStockProgram: true },
+  { id: 5, name: 'Satin Light', shortName: 'SAN', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_Satin_Light.jpg', isActive: true, isStockProgram: false },
+  { id: 6, name: 'Super Gloss', shortName: 'SGL', manufacturerId: 1, imagePath: '/uploads/embossings/Greenlam_Super_Gloss.jpg', isActive: true, isStockProgram: false },
 ];
 
 export const initialPanelSizes: PanelSize[] = [
@@ -69,7 +69,7 @@ export const initialDecors: PanelFormat[] = [
     pricePerSheet: 399.00,
     markup: 46.5,
     currency: 'EUR',
-    decorPhotoPath: '/uploads/decors/Gentas_3096_CANYON.jpg',
+    decorPhotoPath: '/uploads/decors/Gentas_3096_Canyon_Wood.jpg',
     isStockDecor: true,
     isStockProgram: true,
     isActive: true,
@@ -93,7 +93,7 @@ export const initialDecors: PanelFormat[] = [
     pricePerSheet: 431.94,
     markup: 48.3,
     currency: 'EUR',
-    decorPhotoPath: '/uploads/decors/Gentas_3153_VELUR.jpg',
+    decorPhotoPath: '/uploads/decors/Gentas_3153_Velur_Light.jpg',
     isStockDecor: true,
     isStockProgram: true,
     isActive: true,
@@ -117,7 +117,7 @@ export const initialDecors: PanelFormat[] = [
     pricePerSheet: 474.37,
     markup: 48.3,
     currency: 'EUR',
-    decorPhotoPath: '/uploads/decors/Gentas_3155_CANYON.jpg',
+    decorPhotoPath: '/uploads/decors/Gentas_3155_Canyon_Dark.jpg',
     isStockDecor: true,
     isStockProgram: true,
     isActive: true,
@@ -141,7 +141,7 @@ export const initialDecors: PanelFormat[] = [
     pricePerSheet: 313.23,
     markup: 46.2,
     currency: 'EUR',
-    decorPhotoPath: '/uploads/decors/Greenlam_261_SUD.jpg',
+    decorPhotoPath: '/uploads/decors/Greenlam_261_SUD_Natural_Elm.jpg',
     isStockDecor: true,
     isStockProgram: true,
     isActive: true,
@@ -165,7 +165,7 @@ export const initialDecors: PanelFormat[] = [
     pricePerSheet: 527.67,
     markup: 45.5,
     currency: 'EUR',
-    decorPhotoPath: '/uploads/decors/Greenlam_275_ESD.jpg',
+    decorPhotoPath: '/uploads/decors/Greenlam_275_ESD_Brushed_Metal.jpg',
     isStockDecor: false,
     isStockProgram: true,
     isActive: true,
@@ -186,11 +186,11 @@ export const initialProductTypes: ProductType[] = [
 ];
 
 export const initialServices: Service[] = [
-  { id: 1, name: 'Прямой распил HPL панели', unit: 'м.п.', price: 250.00, currency: 'RUB', photoPath: '/uploads/services/0cc6cc523ac3b9527bcc6e8d.jpg' },
-  { id: 2, name: 'Обработка кромки (фаска 45°)', unit: 'м.п.', price: 450.00, currency: 'RUB', photoPath: '/uploads/services/1de1cdadf4279fdf389cfac6.jpg' },
-  { id: 3, name: 'Вырез под мойку / варочную панель', unit: 'шт.', price: 1200.00, currency: 'RUB', photoPath: '/uploads/services/29a673f6ed0319b25dc908a7.jpg' },
-  { id: 4, name: 'Фрезеровка еврозапила (стык)', unit: 'компл.', price: 3500.00, currency: 'RUB', photoPath: '/uploads/services/3863c3d035e86f162bd3196b.jpg' },
-  { id: 5, name: 'Сборка и монтаж сантехнической кабины', unit: 'м²', price: 1800.00, currency: 'RUB' },
+  { id: 1, name: 'Прямой распил HPL панели', unit: 'м.п.', price: 250.00, currency: 'RUB', photoPath: '/uploads/services/Pryamoy_raspil_HPL_paneli.jpg' },
+  { id: 2, name: 'Обработка кромки (фаска 45°)', unit: 'м.п.', price: 450.00, currency: 'RUB', photoPath: '/uploads/services/Obrabotka_kromki_faska_45.jpg' },
+  { id: 3, name: 'Вырез под мойку / варочную панель', unit: 'шт.', price: 1200.00, currency: 'RUB', photoPath: '/uploads/services/Vyrez_pod_moyku_varochnuyu_panel.jpg' },
+  { id: 4, name: 'Фрезеровка еврозапила (стык)', unit: 'компл.', price: 3500.00, currency: 'RUB', photoPath: '/uploads/services/Frezerovka_evrozapila_styk.jpg' },
+  { id: 5, name: 'Сборка и монтаж сантехнической кабины', unit: 'м²', price: 1800.00, currency: 'RUB', photoPath: '/uploads/services/Sborka_i_montazh_santekhnicheskoy_kabiny.jpg' },
 ];
 
 export const initialSuppliers: Supplier[] = [
@@ -210,5 +210,5 @@ export const initialOrganization: OrganizationSettings = {
   ogrn: '1187746012345',
   bik: '044525225',
   bankName: 'АО "Альфа-Банк"',
-  logoPath: '/uploads/organization/586fe780cafeea4baeeb0ea6.png'
+  logoPath: '/uploads/organization/OOO_STK_Kompozit.png'
 };
