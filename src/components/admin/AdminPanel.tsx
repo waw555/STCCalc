@@ -11,7 +11,7 @@ import {
   OrganizationSettings, 
   UserSession 
 } from '../../types';
-import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X } from 'lucide-react';
+import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil } from 'lucide-react';
 import { fetchCbrRates, CbrValute, POPULAR_CBR_CURRENCIES } from '../../services/cbrRates';
 import { 
   generateDecorFilePath, 
@@ -32,6 +32,7 @@ interface AdminPanelProps {
   isRefreshingRates?: boolean;
   manufacturers: Manufacturer[];
   onAddManufacturer: (mfg: Omit<Manufacturer, 'id'>) => void;
+  onUpdateManufacturer?: (mfg: Manufacturer) => void;
   onDeleteManufacturer: (id: number) => void;
   decors: PanelFormat[];
   onAddDecor: (decor: Omit<PanelFormat, 'id'>) => void;
@@ -57,6 +58,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   isRefreshingRates,
   manufacturers,
   onAddManufacturer,
+  onUpdateManufacturer,
   onDeleteManufacturer,
   decors,
   onAddDecor,
@@ -115,6 +117,58 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setNewMfgLogoPreview('');
     setNewMfgLogoFileName('');
     setNewMfgExt('png');
+  };
+
+  // Manufacturer edit state
+  const [editingMfgId, setEditingMfgId] = useState<number | null>(null);
+  const [editMfgName, setEditMfgName] = useState('');
+  const [editMfgCountry, setEditMfgCountry] = useState('');
+  const [editMfgNote, setEditMfgNote] = useState('');
+  const [editMfgLogoPreview, setEditMfgLogoPreview] = useState('');
+  const [editMfgLogoFileName, setEditMfgLogoFileName] = useState('');
+
+  const handleStartEditMfg = (m: Manufacturer) => {
+    setEditingMfgId(m.id);
+    setEditMfgName(m.fullName);
+    setEditMfgCountry(m.countryOrigin);
+    setEditMfgNote(m.note || '');
+    setEditMfgLogoPreview(m.logoPath || '');
+    setEditMfgLogoFileName('');
+  };
+
+  const handleCancelEditMfg = () => {
+    setEditingMfgId(null);
+    setEditMfgName('');
+    setEditMfgCountry('');
+    setEditMfgNote('');
+    setEditMfgLogoPreview('');
+    setEditMfgLogoFileName('');
+  };
+
+  const handleEditMfgLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setEditMfgLogoFileName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditMfgLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveEditMfg = (m: Manufacturer) => {
+    if (!editMfgName.trim()) return;
+    if (onUpdateManufacturer) {
+      onUpdateManufacturer({
+        ...m,
+        fullName: editMfgName,
+        countryOrigin: editMfgCountry,
+        note: editMfgNote,
+        logoPath: editMfgLogoPreview || m.logoPath,
+      });
+    }
+    handleCancelEditMfg();
   };
 
   // Decor form state
@@ -459,34 +513,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
           
           {/* Form */}
-          <form onSubmit={handleAddMfgSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
+          <form onSubmit={handleAddMfgSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+              <div className="md:col-span-4">
                 <label className="block text-xs font-bold text-slate-700 mb-1">Название бренда</label>
                 <input
                   type="text"
                   placeholder="Например, Arpa"
                   value={newMfgName}
                   onChange={(e) => setNewMfgName(e.target.value)}
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
+              <div className="md:col-span-3">
                 <label className="block text-xs font-bold text-slate-700 mb-1">Страна происхождения</label>
                 <input
                   type="text"
                   placeholder="Например, Италия"
                   value={newMfgCountry}
                   onChange={(e) => setNewMfgCountry(e.target.value)}
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
+              <div className="md:col-span-3">
                 <label className="block text-xs font-bold text-slate-700 mb-1">Логотип бренда</label>
                 <div className="flex items-center gap-2">
                   <label className="flex-1 flex items-center justify-center gap-2 border border-dashed border-slate-300 hover:border-blue-400 rounded-lg px-3 py-2 bg-white hover:bg-slate-100/80 cursor-pointer transition text-xs font-semibold text-slate-700">
                     <Upload className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                    <span className="truncate">{newMfgLogoFileName || 'Выбрать файл логотипа'}</span>
+                    <span className="truncate">{newMfgLogoFileName || 'Выбрать логотип'}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -495,88 +549,162 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </label>
                   {newMfgLogoPreview && (
-                    <button
-                      type="button"
-                      onClick={handleClearMfgLogo}
-                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition"
-                      title="Удалить выбранный логотип"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="relative group flex-shrink-0">
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center overflow-hidden">
+                        <img src={newMfgLogoPreview} alt="Preview" className="max-h-full max-w-full object-contain" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearMfgLogo}
+                        className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 shadow hover:bg-rose-600 transition"
+                        title="Удалить"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* Upload & Path Info */}
-            <div className="bg-blue-50/80 border border-blue-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                {newMfgLogoPreview ? (
-                  <div className="w-10 h-10 rounded-lg bg-white border border-blue-200 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    <img src={newMfgLogoPreview} alt="Preview" className="max-h-full max-w-full object-contain" />
-                  </div>
-                ) : (
-                  <ImageIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                )}
-                <div className="space-y-0.5">
-                  <div className="text-blue-950 font-medium">
-                    {newMfgLogoPreview ? 'Выбранный логотип готов к сохранению' : 'Системное имя файла:'}
-                  </div>
-                  <code className="font-mono bg-white px-2 py-0.5 rounded border border-blue-200 font-bold text-blue-700 block truncate max-w-md">
-                    {generateManufacturerFilePath(newMfgName || 'Производитель', newMfgExt)}
-                  </code>
-                </div>
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow transition flex items-center justify-center gap-1.5 min-h-[36px]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить</span>
+                </button>
               </div>
-              <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow whitespace-nowrap">
-                Добавить бренда
-              </button>
             </div>
           </form>
 
           {/* Manufacturers Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {manufacturers.map(m => (
-              <div key={m.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-bold text-slate-900">{m.fullName}</div>
-                    <div className="text-xs text-slate-500 font-medium">{m.countryOrigin}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteManufacturer(m.id)}
-                    title="Удалить производителя"
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+            {manufacturers.map(m => {
+              const isEditing = editingMfgId === m.id;
 
-                {/* Logo Graphic Container */}
-                <div className="h-16 w-full bg-white rounded-lg p-2 border border-slate-200/90 flex items-center justify-center overflow-hidden shadow-inner">
-                  {m.logoPath ? (
-                    <img
-                      src={m.logoPath}
-                      alt={m.fullName}
-                      className="max-h-full max-w-full object-contain"
-                      onError={(e) => {
-                        const target = e.currentTarget;
-                        target.style.display = 'none';
-                        const sibling = target.nextElementSibling as HTMLElement | null;
-                        if (sibling) sibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div
-                    className="hidden items-center justify-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider"
-                    style={{ display: !m.logoPath ? 'flex' : 'none' }}
-                  >
-                    <ImageIcon className="w-4 h-4 text-slate-300" />
-                    <span>{m.fullName}</span>
+              if (isEditing) {
+                return (
+                  <div key={m.id} className="bg-blue-50/70 border-2 border-blue-500 rounded-xl p-4 space-y-3 shadow-md">
+                    <div className="flex items-center justify-between pb-2 border-b border-blue-200">
+                      <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">Редактирование</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEditMfg(m)}
+                          title="Сохранить изменения"
+                          className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow flex items-center gap-1 text-xs font-semibold px-2"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Сохранить</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEditMfg}
+                          title="Отмена"
+                          className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Название бренда</label>
+                        <input
+                          type="text"
+                          value={editMfgName}
+                          onChange={(e) => setEditMfgName(e.target.value)}
+                          className="w-full font-bold border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Страна происхождения</label>
+                        <input
+                          type="text"
+                          value={editMfgCountry}
+                          onChange={(e) => setEditMfgCountry(e.target.value)}
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Заменить логотип</label>
+                        <div className="flex items-center gap-2">
+                          <label className="flex-1 flex items-center justify-center gap-1.5 border border-dashed border-slate-300 hover:border-blue-400 rounded-lg px-2 py-1.5 bg-white cursor-pointer transition text-[11px] font-semibold text-slate-700">
+                            <Upload className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                            <span className="truncate">{editMfgLogoFileName || 'Загрузить новый'}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleEditMfgLogoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          {editMfgLogoPreview && (
+                            <div className="w-8 h-8 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              <img src={editMfgLogoPreview} alt="Preview" className="max-h-full max-w-full object-contain" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={m.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3 hover:border-slate-300 transition">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">{m.fullName}</div>
+                      <div className="text-xs text-slate-500 font-medium">{m.countryOrigin}</div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditMfg(m)}
+                        title="Редактировать производителя"
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteManufacturer(m.id)}
+                        title="Удалить производителя"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Logo Graphic Container */}
+                  <div className="h-16 w-full bg-white rounded-lg p-2 border border-slate-200/90 flex items-center justify-center overflow-hidden shadow-inner">
+                    {m.logoPath ? (
+                      <img
+                        src={m.logoPath}
+                        alt={m.fullName}
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const sibling = target.nextElementSibling as HTMLElement | null;
+                          if (sibling) sibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="hidden items-center justify-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider"
+                      style={{ display: !m.logoPath ? 'flex' : 'none' }}
+                    >
+                      <ImageIcon className="w-4 h-4 text-slate-300" />
+                      <span>{m.fullName}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

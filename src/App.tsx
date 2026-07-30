@@ -133,6 +133,10 @@ export const App: React.FC = () => {
     setManufacturers(prev => prev.filter(m => m.id !== id));
   };
 
+  const handleUpdateManufacturer = (updated: Manufacturer) => {
+    setManufacturers(prev => prev.map(m => m.id === updated.id ? updated : m));
+  };
+
   const handleAddDecor = (decor: Omit<PanelFormat, 'id'>) => {
     const newDecor: PanelFormat = { id: Date.now(), ...decor };
     setDecors(prev => [newDecor, ...prev]);
@@ -250,6 +254,7 @@ export const App: React.FC = () => {
             isRefreshingRates={isRefreshingRates}
             manufacturers={manufacturers}
             onAddManufacturer={handleAddManufacturer}
+            onUpdateManufacturer={handleUpdateManufacturer}
             onDeleteManufacturer={handleDeleteManufacturer}
             decors={decors}
             onAddDecor={handleAddDecor}
