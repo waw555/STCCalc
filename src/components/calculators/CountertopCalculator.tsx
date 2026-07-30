@@ -73,8 +73,9 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
   // Form inputs for adding item
   const [newItemType, setNewItemType] = useState<string>('kitchen');
   const [newItemWidth, setNewItemWidth] = useState<number>(600);
-  const [newItemLength, setNewItemLength] = useState<number>(2000);
+  const [newItemLength, setNewItemLength] = useState<number>(3000);
   const [newItemQty, setNewItemQty] = useState<number>(1);
+  const [newItemDecorId, setNewItemDecorId] = useState<number | 'default'>('default');
   const [newItemNote, setNewItemNote] = useState<string>('');
 
   // Calc metadata & saving state
@@ -132,9 +133,17 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
   const sheetCostRub = costRubPerM2 * sheetAreaM2;
   const sheetPriceRub = priceRubPerM2 * sheetAreaM2;
 
-  // Item math calculations
+  // Item math calculations with support for custom decor per item
   const itemsCalculated = useMemo(() => {
     return items.map(item => {
+      const itemDecor = decors.find(d => d.id === (item.decorId || selectedDecorId)) || activeDecor;
+      const itemRate = currencies.find(c => c.code === (itemDecor?.currency || 'EUR'))?.rateToRub || 98.45;
+      const itemCostEur = itemDecor?.cost || 58.0;
+      const itemMarkup = customMarkup !== null ? customMarkup : (itemDecor?.markup || 46.5);
+
+      const itemCostRub = itemCostEur * itemRate;
+      const itemPriceRubPerM2 = itemCostRub * (1 + itemMarkup / 100);
+
       const areaPerPiece = (item.widthMm * item.lengthMm) / 1000000;
       const totalArea = areaPerPiece * item.quantity;
       const pt = productTypes.find(p => p.typeKey === item.typeKey);
@@ -144,11 +153,13 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
       const processingM = item.processingM > 0 ? item.processingM : (item.lengthMm / 1000) * item.quantity;
       const processingCostRub = processingM * procRateM * (currencies.find(c => c.code === 'EUR')?.rateToRub || 98.45);
 
-      const materialCostRub = totalArea * priceRubPerM2;
+      const materialCostRub = totalArea * itemPriceRubPerM2;
       const itemTotalRub = materialCostRub + processingCostRub;
 
       return {
         ...item,
+        itemDecor,
+        itemPriceRubPerM2,
         areaPerPiece,
         totalArea,
         processingM,
@@ -157,7 +168,52 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
         itemTotalRub,
       };
     });
-  }, [items, priceRubPerM2, productTypes, currencies]);
+  }, [items, decors, selectedDecorId, activeDecor, customMarkup, productTypes, currencies]);
+
+  // Group calculations by Decor to compute sheet requirements per plate material
+  const sheetsByDecor = useMemo(() => {
+    const groups: {
+      [decorId: number]: {
+        decor: PanelFormat;
+        totalAreaM2: number;
+        materialCostRub: number;
+        sheetsCount: number;
+        sheetPriceRub: number;
+      };
+    } = {};
+
+    itemsCalculated.forEach(item => {
+      const d = item.itemDecor;
+      if (!d) return;
+
+      if (!groups[d.id]) {
+        const rate = currencies.find(c => c.code === (d.currency || 'EUR'))?.rateToRub || 98.45;
+        const costEur = d.cost || 58.0;
+        const markup = customMarkup !== null ? customMarkup : (d.markup || 46.5);
+        const pricePerM2 = costEur * rate * (1 + markup / 100);
+        const sArea = (d.widthMm * d.heightMm) / 1000000;
+        const sPrice = pricePerM2 * sArea;
+
+        groups[d.id] = {
+          decor: d,
+          totalAreaM2: 0,
+          materialCostRub: 0,
+          sheetsCount: 0,
+          sheetPriceRub: sPrice,
+        };
+      }
+
+      groups[d.id].totalAreaM2 += item.totalArea;
+      groups[d.id].materialCostRub += item.materialCostRub;
+    });
+
+    Object.values(groups).forEach(g => {
+      const sArea = (g.decor.widthMm * g.decor.heightMm) / 1000000;
+      g.sheetsCount = Math.max(1, Math.ceil((g.totalAreaM2 * 1.15) / sArea));
+    });
+
+    return Object.values(groups);
+  }, [itemsCalculated, currencies, customMarkup]);
 
   // Total Summary
   const totalAreaM2 = useMemo(() => itemsCalculated.reduce((acc, i) => acc + i.totalArea, 0), [itemsCalculated]);
@@ -165,9 +221,10 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
   const totalProcessingCostRub = useMemo(() => itemsCalculated.reduce((acc, i) => acc + i.processingCostRub, 0), [itemsCalculated]);
   const grandTotalRub = totalMaterialCostRub + totalProcessingCostRub;
 
-  // Estimate required sheets (factoring 15% kerf/waste margin)
-  const estimatedSheetsCount = Math.max(1, Math.ceil((totalAreaM2 * 1.15) / sheetAreaM2));
-  const fullSheetsPriceRub = estimatedSheetsCount * sheetPriceRub;
+  // Total estimated sheets across all decors
+  const totalEstimatedSheetsCount = useMemo(() => {
+    return sheetsByDecor.reduce((acc, s) => acc + s.sheetsCount, 0);
+  }, [sheetsByDecor]);
 
   // Currency display helper
   const formatCurrency = (amountRub: number) => {
@@ -183,6 +240,7 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
     const pt = productTypes.find(p => p.typeKey === newItemType);
+    const chosenDecorId = newItemDecorId === 'default' ? selectedDecorId : newItemDecorId;
     const item: CountertopItem = {
       id: `item-${Date.now()}`,
       typeKey: newItemType,
@@ -191,10 +249,16 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
       lengthMm: newItemLength,
       quantity: newItemQty,
       processingM: (newItemLength / 1000) * newItemQty,
+      decorId: chosenDecorId,
       note: newItemNote,
     };
     setItems(prev => [...prev, item]);
     setNewItemNote('');
+  };
+
+  // Update specific item's decor
+  const handleUpdateItemDecor = (id: string, decorId: number) => {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, decorId } : i));
   };
 
   // Delete Item Handler
@@ -474,8 +538,8 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
 
         {/* Form to add item */}
         <form onSubmit={handleAddItem} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-          <div className="text-xs font-bold text-slate-800 uppercase tracking-wider">Добавить деталь</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <div className="text-xs font-bold text-slate-800 uppercase tracking-wider">Добавить деталь в расчёт</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
             
             <div className="lg:col-span-2">
               <label className="block text-xs font-semibold text-slate-600 mb-1">Тип изделия</label>
@@ -492,6 +556,24 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
               >
                 {productTypes.map(p => (
                   <option key={p.typeKey} value={p.typeKey}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Материал / Декор плиты</label>
+              <select
+                value={newItemDecorId}
+                onChange={(e) => setNewItemDecorId(e.target.value === 'default' ? 'default' : Number(e.target.value))}
+                className="w-full text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-2 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="default">
+                  По умолчанию [{activeDecor?.decorNumber}] {activeDecor?.decorName}
+                </option>
+                {decors.map(d => (
+                  <option key={d.id} value={d.id}>
+                    [{d.decorNumber}] {d.decorName} ({d.heightMm}×{d.widthMm}×{d.thicknessMm || 12}мм)
+                  </option>
                 ))}
               </select>
             </div>
@@ -532,7 +614,7 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
               />
             </div>
 
-            <div className="flex items-end">
+            <div className="flex items-end lg:col-span-1">
               <button
                 type="submit"
                 className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-3 rounded-lg shadow transition"
@@ -552,6 +634,7 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
               <tr>
                 <th className="py-3 px-3">№</th>
                 <th className="py-3 px-3">Наименование / Тип</th>
+                <th className="py-3 px-3">Материал / Декор</th>
                 <th className="py-3 px-3 text-center">Размеры (мм)</th>
                 <th className="py-3 px-3 text-center">Площадь (м²)</th>
                 <th className="py-3 px-3 text-center">Кол-во</th>
@@ -569,6 +652,21 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
                   <td className="py-3 px-3 font-semibold text-slate-900">
                     <div>{item.typeName}</div>
                     {item.note && <div className="text-[11px] font-normal text-slate-500">{item.note}</div>}
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={item.decorId || selectedDecorId}
+                        onChange={(e) => handleUpdateItemDecor(item.id, Number(e.target.value))}
+                        className="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none max-w-[210px]"
+                      >
+                        {decors.map(d => (
+                          <option key={d.id} value={d.id}>
+                            [{d.decorNumber}] {d.decorName} ({d.thicknessMm || 12}мм)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </td>
                   <td className="py-3 px-3 text-center font-medium">
                     {item.lengthMm} × {item.widthMm}
@@ -605,7 +703,7 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
 
               {itemsCalculated.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-400 text-sm">
+                  <td colSpan={11} className="py-8 text-center text-slate-400 text-sm">
                     Нет добавленных деталей. Воспользуйтесь формой выше, чтобы добавить элементы.
                   </td>
                 </tr>
@@ -613,6 +711,44 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
             </tbody>
           </table>
         </div>
+
+        {/* Breakdown by Decor Plates */}
+        {sheetsByDecor.length > 0 && (
+          <div className="bg-slate-900 text-white rounded-xl p-4 space-y-3">
+            <div className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-teal-400" />
+                Расчёт потребности листов HPL по декорам ({sheetsByDecor.length} декор{sheetsByDecor.length > 1 ? 'а' : ''})
+              </span>
+              <span className="text-slate-400 font-medium lowercase">уточнённый расчёт по материалам</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {sheetsByDecor.map(g => (
+                <div key={g.decor.id} className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-3 text-xs space-y-1.5 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-700/60 pb-1.5">
+                    <div className="font-bold text-white text-xs truncate">
+                      [{g.decor.decorNumber}] {g.decor.decorName}
+                    </div>
+                    <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-400/30 font-semibold">
+                      {g.decor.thicknessMm || 12} мм
+                    </span>
+                  </div>
+                  <div className="text-slate-400 text-[11px]">
+                    Формат: <strong>{g.decor.heightMm}×{g.decor.widthMm} мм</strong> ({((g.decor.heightMm * g.decor.widthMm)/1000000).toFixed(2)} м²/лист)
+                  </div>
+                  <div className="flex justify-between items-center text-slate-300 pt-1">
+                    <span>Площадь: <strong>{g.totalAreaM2.toFixed(2)} м²</strong></span>
+                    <span className="text-teal-300 font-extrabold text-xs">Листов: {g.sheetsCount} шт.</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-700/60 text-[11px]">
+                    <span className="text-slate-400">Стоимость листа:</span>
+                    <span className="font-bold text-teal-400">{formatCurrency(g.sheetPriceRub)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Summary Footer Box */}
         <div className="bg-slate-900 text-white rounded-2xl p-6 grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
@@ -622,7 +758,7 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
               {totalAreaM2.toFixed(2)} м²
             </div>
             <div className="text-xs text-slate-400 mt-1">
-              Расчётное кол-во листов: <strong className="text-teal-400">{estimatedSheetsCount} шт.</strong> ({sheetAreaM2.toFixed(2)} м²/лист)
+              Всего листов: <strong className="text-teal-400">{totalEstimatedSheetsCount} шт.</strong> по типам декоров
             </div>
           </div>
 

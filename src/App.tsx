@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
 import { CountertopCalculator } from './components/calculators/CountertopCalculator';
@@ -9,6 +9,7 @@ import { SepticCalculator } from './components/calculators/SepticCalculator';
 import { PriceListCountertops } from './components/pricelist/PriceListCountertops';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { LoginModal } from './components/auth/LoginModal';
+import { fetchCbrRates } from './services/cbrRates';
 
 import { 
   TabType, 
@@ -66,22 +67,61 @@ export const App: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [organization, setOrganization] = useState<OrganizationSettings>(initialOrganization);
 
-  // Refresh CBR rates handler
-  const handleRefreshRates = () => {
+  // Fetch live CBR rates on app load
+  useEffect(() => {
+    loadLiveCbrRates();
+  }, []);
+
+  const loadLiveCbrRates = async () => {
     setIsRefreshingRates(true);
-    setTimeout(() => {
-      // Simulate live rates update from cbr.ru
-      setCurrencies(prev => prev.map(c => {
-        if (c.code === 'EUR') return { ...c, rateToRub: 98.45, updatedAt: new Date().toLocaleTimeString() };
-        if (c.code === 'USD') return { ...c, rateToRub: 89.20, updatedAt: new Date().toLocaleTimeString() };
-        return c;
-      }));
+    try {
+      const cbrData = await fetchCbrRates();
+      if (cbrData.rates && Object.keys(cbrData.rates).length > 0) {
+        setCurrencies(prev => prev.map(c => {
+          if (c.code === 'RUB') return c;
+          const liveRate = cbrData.rates[c.code];
+          if (liveRate) {
+            return { 
+              ...c, 
+              rateToRub: liveRate, 
+              updatedAt: cbrData.date || new Date().toLocaleDateString('ru-RU') 
+            };
+          }
+          return c;
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to update rates from CBR:', err);
+    } finally {
       setIsRefreshingRates(false);
-    }, 600);
+    }
+  };
+
+  // Manual CBR refresh handler
+  const handleRefreshRates = () => {
+    loadLiveCbrRates();
   };
 
   const handleUpdateCurrencyRate = (code: string, newRate: number) => {
     setCurrencies(prev => prev.map(c => c.code === code ? { ...c, rateToRub: newRate } : c));
+  };
+
+  const handleAddCurrency = (newCurr: Currency) => {
+    setCurrencies(prev => {
+      const exists = prev.some(c => c.code === newCurr.code);
+      if (exists) {
+        return prev.map(c => c.code === newCurr.code ? { ...c, ...newCurr } : c);
+      }
+      return [...prev, newCurr];
+    });
+  };
+
+  const handleDeleteCurrency = (code: string) => {
+    if (code === 'RUB') return; // Cannot delete base currency
+    setCurrencies(prev => prev.filter(c => c.code !== code));
+    if (selectedCurrency === code) {
+      setSelectedCurrency('RUB');
+    }
   };
 
   const handleAddManufacturer = (mfg: Omit<Manufacturer, 'id'>) => {
@@ -196,6 +236,10 @@ export const App: React.FC = () => {
             userSession={userSession}
             currencies={currencies}
             onUpdateCurrencyRate={handleUpdateCurrencyRate}
+            onAddCurrency={handleAddCurrency}
+            onDeleteCurrency={handleDeleteCurrency}
+            onRefreshRates={handleRefreshRates}
+            isRefreshingRates={isRefreshingRates}
             manufacturers={manufacturers}
             onAddManufacturer={handleAddManufacturer}
             onDeleteManufacturer={handleDeleteManufacturer}

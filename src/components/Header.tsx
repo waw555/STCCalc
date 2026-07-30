@@ -72,22 +72,53 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Currency Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2 py-1">
-              <span className="text-xs text-slate-400 font-medium px-1">Валюта:</span>
-              <div className="flex bg-slate-900 rounded-md p-0.5 border border-slate-700">
-                {currencies.map(c => (
-                  <button
-                    key={c.code}
-                    onClick={() => onSelectCurrency(c.code)}
-                    className={`px-2 py-0.5 text-xs font-semibold rounded ${
-                      selectedCurrency === c.code
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
+            <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
+              <span className="text-xs text-slate-400 font-medium">Валюта:</span>
+              <div className="flex items-center gap-1 bg-slate-900 rounded-md p-0.5 border border-slate-700">
+                {/* Main fixed buttons for RUB, EUR, USD */}
+                {['RUB', 'EUR', 'USD'].map(code => {
+                  const hasCurr = currencies.some(c => c.code === code);
+                  if (!hasCurr) return null;
+                  return (
+                    <button
+                      key={code}
+                      onClick={() => onSelectCurrency(code)}
+                      className={`px-2 py-0.5 text-xs font-semibold rounded transition ${
+                        selectedCurrency === code
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {code}
+                    </button>
+                  );
+                })}
+
+                {/* Select dropdown if there are additional active currencies */}
+                {currencies.filter(c => !['RUB', 'EUR', 'USD'].includes(c.code)).length > 0 && (
+                  <select
+                    value={['RUB', 'EUR', 'USD'].includes(selectedCurrency) ? '' : selectedCurrency}
+                    onChange={(e) => {
+                      if (e.target.value) onSelectCurrency(e.target.value);
+                    }}
+                    className={`text-xs font-semibold rounded px-1.5 py-0.5 outline-none bg-slate-800 border ${
+                      !['RUB', 'EUR', 'USD'].includes(selectedCurrency)
+                        ? 'bg-blue-600 text-white border-blue-500 font-bold'
+                        : 'text-slate-300 border-slate-700'
                     }`}
                   >
-                    {c.code}
-                  </button>
-                ))}
+                    <option value="" disabled hidden>
+                      + Ещё
+                    </option>
+                    {currencies
+                      .filter(c => !['RUB', 'EUR', 'USD'].includes(c.code))
+                      .map(c => (
+                        <option key={c.code} value={c.code} className="bg-slate-900 text-white font-medium">
+                          {c.code} ({c.name})
+                        </option>
+                      ))}
+                  </select>
+                )}
               </div>
             </div>
 
