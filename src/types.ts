@@ -171,6 +171,17 @@ export interface UserSession {
   role: 'admin' | 'user';
 }
 
+export interface UserAccount {
+  id: number;
+  username: string;
+  fullName: string;
+  email: string;
+  role: 'admin' | 'user';
+  createdAt: string;
+  isActive: boolean;
+  password?: string;
+}
+
 export type TabType = 
   | 'calc_countertops'
   | 'calc_partitions'

@@ -24,7 +24,8 @@ import {
   Service, 
   Supplier, 
   OrganizationSettings, 
-  UserSession 
+  UserSession,
+  UserAccount 
 } from './types';
 
 import { 
@@ -38,7 +39,8 @@ import {
   initialProductTypes, 
   initialServices, 
   initialSuppliers, 
-  initialOrganization 
+  initialOrganization,
+  initialUsers 
 } from './data/initialData';
 
 export const App: React.FC = () => {
@@ -66,6 +68,7 @@ export const App: React.FC = () => {
   const [services, setServices] = useState<Service[]>(initialServices);
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [organization, setOrganization] = useState<OrganizationSettings>(initialOrganization);
+  const [users, setUsers] = useState<UserAccount[]>(initialUsers);
 
   // Fetch live CBR rates on app load
   useEffect(() => {
@@ -160,6 +163,23 @@ export const App: React.FC = () => {
 
   const handleDeleteService = (id: number) => {
     setServices(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleAddUser = (user: Omit<UserAccount, 'id' | 'createdAt'>) => {
+    const newUser: UserAccount = {
+      id: Date.now(),
+      createdAt: new Date().toISOString().split('T')[0],
+      ...user
+    };
+    setUsers(prev => [newUser, ...prev]);
+  };
+
+  const handleUpdateUser = (updated: UserAccount) => {
+    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+  };
+
+  const handleDeleteUser = (id: number) => {
+    setUsers(prev => prev.filter(u => u.id !== id));
   };
 
   return (
@@ -268,6 +288,10 @@ export const App: React.FC = () => {
             suppliers={suppliers}
             organization={organization}
             onUpdateOrganization={setOrganization}
+            users={users}
+            onAddUser={handleAddUser}
+            onUpdateUser={handleUpdateUser}
+            onDeleteUser={handleDeleteUser}
           />
         )}
       </main>

@@ -9,9 +9,10 @@ import {
   Service, 
   Supplier, 
   OrganizationSettings, 
-  UserSession 
+  UserSession,
+  UserAccount 
 } from '../../types';
-import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil } from 'lucide-react';
+import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil, Users, UserPlus, ShieldCheck, UserCheck, Lock, Mail, User as UserIcon, Search } from 'lucide-react';
 import { fetchCbrRates, CbrValute, POPULAR_CBR_CURRENCIES } from '../../services/cbrRates';
 import { 
   generateDecorFilePath, 
@@ -46,6 +47,10 @@ interface AdminPanelProps {
   suppliers: Supplier[];
   organization: OrganizationSettings;
   onUpdateOrganization: (org: OrganizationSettings) => void;
+  users?: UserAccount[];
+  onAddUser?: (user: Omit<UserAccount, 'id' | 'createdAt'>) => void;
+  onUpdateUser?: (user: UserAccount) => void;
+  onDeleteUser?: (id: number) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -72,8 +77,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   suppliers,
   organization,
   onUpdateOrganization,
+  users = [],
+  onAddUser,
+  onUpdateUser,
+  onDeleteUser,
 }) => {
-  const [adminTab, setAdminTab] = useState<'currencies' | 'mfg' | 'decors' | 'embossings' | 'services' | 'org'>('currencies');
+  const [adminTab, setAdminTab] = useState<'currencies' | 'mfg' | 'decors' | 'embossings' | 'services' | 'users' | 'org'>('currencies');
 
   // CBR currencies state for adding
   const [cbrValutes, setCbrValutes] = useState<CbrValute[]>(POPULAR_CBR_CURRENCIES);
@@ -194,6 +203,75 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Org form state
   const [orgState, setOrgState] = useState<OrganizationSettings>(organization);
   const [orgSaveMessage, setOrgSaveMessage] = useState<string | null>(null);
+
+  // Users form state
+  const [newUsername, setNewUsername] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'admin' | 'user'>('user');
+  const [userSearch, setUserSearch] = useState('');
+
+  // User edit state
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [editUsername, setEditUsername] = useState('');
+  const [editFullName, setEditFullName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
+  const [editIsActive, setEditIsActive] = useState<boolean>(true);
+
+  const handleAddUserSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUsername.trim() || !newFullName.trim()) return;
+    if (onAddUser) {
+      onAddUser({
+        username: newUsername.trim().toLowerCase(),
+        fullName: newFullName.trim(),
+        email: newEmail.trim() || `${newUsername.trim().toLowerCase()}@stc-hpl.ru`,
+        role: newRole,
+        password: newPassword || '123456',
+        isActive: true,
+      });
+    }
+    setNewUsername('');
+    setNewFullName('');
+    setNewEmail('');
+    setNewPassword('');
+    setNewRole('user');
+  };
+
+  const handleStartEditUser = (u: UserAccount) => {
+    setEditingUserId(u.id);
+    setEditUsername(u.username);
+    setEditFullName(u.fullName);
+    setEditEmail(u.email);
+    setEditRole(u.role);
+    setEditIsActive(u.isActive);
+  };
+
+  const handleCancelEditUser = () => {
+    setEditingUserId(null);
+    setEditUsername('');
+    setEditFullName('');
+    setEditEmail('');
+    setEditRole('user');
+    setEditIsActive(true);
+  };
+
+  const handleSaveEditUser = (u: UserAccount) => {
+    if (!editUsername.trim() || !editFullName.trim()) return;
+    if (onUpdateUser) {
+      onUpdateUser({
+        ...u,
+        username: editUsername.trim().toLowerCase(),
+        fullName: editFullName.trim(),
+        email: editEmail.trim(),
+        role: editRole,
+        isActive: editIsActive,
+      });
+    }
+    handleCancelEditUser();
+  };
 
   if (userSession.role !== 'admin') {
     return (
@@ -362,6 +440,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Sliders className="w-4 h-4" /> Тарифы услуг
+        </button>
+        <button
+          onClick={() => setAdminTab('users')}
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+            adminTab === 'users' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          <Users className="w-4 h-4" /> Пользователи
+          {users.length > 0 && (
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              adminTab === 'users' ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {users.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setAdminTab('org')}
@@ -1000,6 +1093,296 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Users Tab */}
+      {adminTab === 'users' && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
+          <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                <span>Управление пользователями</span>
+              </h2>
+              <p className="text-xs text-slate-500">Добавление новых сотрудников, назначение ролей и управление доступом в систему</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200">
+              <UserCheck className="w-4 h-4 text-emerald-600" />
+              <span>Всего в системе: <strong>{users.length}</strong></span>
+            </div>
+          </div>
+
+          {/* Add User Form */}
+          <form onSubmit={handleAddUserSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
+              <UserPlus className="w-4 h-4 text-blue-600" />
+              Новый пользователь
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">ФИО / Имя *</label>
+                <div className="relative">
+                  <UserIcon className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Иван Петров"
+                    value={newFullName}
+                    onChange={(e) => setNewFullName(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-semibold focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Логин *</label>
+                <div className="relative">
+                  <UserIcon className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="ipetrov"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-semibold focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Email</label>
+                <div className="relative">
+                  <Mail className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                  <input
+                    type="email"
+                    placeholder="petrov@stc-hpl.ru"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-semibold focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Пароль</label>
+                <div className="relative">
+                  <Lock className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                  <input
+                    type="password"
+                    placeholder="Пароль"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-semibold focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Роль доступа</label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as 'admin' | 'user')}
+                  className="w-full font-bold border border-slate-300 rounded-lg px-3 py-2 outline-none bg-white focus:ring-2 focus:ring-blue-500 text-xs"
+                >
+                  <option value="user">Менеджер</option>
+                  <option value="admin">Администратор</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-5 rounded-lg shadow transition flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Добавить пользователя</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Search bar */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Поиск по имени, логину или email..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="w-full text-xs font-semibold pl-9 pr-3 py-2 border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Users List Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {users
+              .filter(u => {
+                const search = userSearch.toLowerCase();
+                return (
+                  u.fullName.toLowerCase().includes(search) ||
+                  u.username.toLowerCase().includes(search) ||
+                  u.email.toLowerCase().includes(search)
+                );
+              })
+              .map(u => {
+                const isEditing = editingUserId === u.id;
+                const initials = u.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase();
+
+                if (isEditing) {
+                  return (
+                    <div key={u.id} className="bg-blue-50/70 border-2 border-blue-500 rounded-xl p-4 space-y-3 shadow-md">
+                      <div className="flex items-center justify-between pb-2 border-b border-blue-200">
+                        <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">Редактирование</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEditUser(u)}
+                            className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow flex items-center gap-1 text-xs font-semibold px-2"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Сохранить</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditUser}
+                            className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">ФИО / Имя</label>
+                          <input
+                            type="text"
+                            value={editFullName}
+                            onChange={(e) => setEditFullName(e.target.value)}
+                            className="w-full font-bold border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Логин</label>
+                          <input
+                            type="text"
+                            value={editUsername}
+                            onChange={(e) => setEditUsername(e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Email</label>
+                          <input
+                            type="email"
+                            value={editEmail}
+                            onChange={(e) => setEditEmail(e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">Роль</label>
+                            <select
+                              value={editRole}
+                              onChange={(e) => setEditRole(e.target.value as 'admin' | 'user')}
+                              className="w-full font-bold border border-slate-300 rounded-lg px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="user">Менеджер</option>
+                              <option value="admin">Администратор</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">Статус</label>
+                            <select
+                              value={editIsActive ? 'active' : 'blocked'}
+                              onChange={(e) => setEditIsActive(e.target.value === 'active')}
+                              className="w-full font-bold border border-slate-300 rounded-lg px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="active">Активен</option>
+                              <option value="blocked">Заблокирован</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={u.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 hover:border-slate-300 transition">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm ${
+                          u.role === 'admin' 
+                            ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
+                            : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
+                        }`}>
+                          {initials}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">{u.fullName}</div>
+                          <div className="text-xs font-semibold text-slate-500">@{u.username}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditUser(u)}
+                          title="Редактировать пользователя"
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        {onDeleteUser && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteUser(u.id)}
+                            title="Удалить пользователя"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/80 space-y-1.5 text-xs text-slate-600">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 font-medium">Email:</span>
+                        <span className="font-semibold text-slate-800 truncate max-w-[180px]" title={u.email}>{u.email}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 font-medium">Роль:</span>
+                        {u.role === 'admin' ? (
+                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-md text-[11px]">
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Администратор
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-md text-[11px]">
+                            <UserCheck className="w-3.5 h-3.5 text-blue-600" /> Менеджер
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-slate-400 font-medium">Статус:</span>
+                        {u.isActive ? (
+                          <span className="text-emerald-600 font-bold flex items-center gap-1 text-[11px]">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Активен
+                          </span>
+                        ) : (
+                          <span className="text-rose-500 font-bold text-[11px]">Заблокирован</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}

@@ -9,7 +9,8 @@ import {
   ProductType, 
   Service, 
   Supplier, 
-  OrganizationSettings 
+  OrganizationSettings,
+  UserAccount 
 } from '../types';
 
 export const initialCurrencies: Currency[] = [
@@ -212,3 +213,33 @@ export const initialOrganization: OrganizationSettings = {
   bankName: 'АО "Альфа-Банк"',
   logoPath: '/uploads/organization/OOO_STK_Kompozit.png'
 };
+
+export const initialUsers: UserAccount[] = [
+  {
+    id: 1,
+    username: 'admin',
+    fullName: 'Главный Администратор',
+    email: 'admin@stc-hpl.ru',
+    role: 'admin',
+    createdAt: '2026-01-15',
+    isActive: true,
+  },
+  {
+    id: 2,
+    username: 'manager',
+    fullName: 'Иван Иванов',
+    email: 'ivanov@stc-hpl.ru',
+    role: 'user',
+    createdAt: '2026-03-20',
+    isActive: true,
+  },
+  {
+    id: 3,
+    username: 'sales',
+    fullName: 'Елена Петрова',
+    email: 'petrova@stc-hpl.ru',
+    role: 'user',
+    createdAt: '2026-05-10',
+    isActive: true,
+  },
+];
