@@ -1,0 +1,6 @@
+{
+  "name": "STCCalc Calculator & Price List Manager",
+  "description": "Commercial calculator and price list management system for compact panels, countertops, partitions, furniture, cutting, and subsystems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
