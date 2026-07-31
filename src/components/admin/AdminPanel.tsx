@@ -12,7 +12,7 @@ import {
   UserSession,
   UserAccount 
 } from '../../types';
-import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil, Users, UserPlus, ShieldCheck, UserCheck, Lock, Mail, User as UserIcon, Search } from 'lucide-react';
+import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil, Users, UserPlus, ShieldCheck, UserCheck, Lock, Mail, User as UserIcon, Search, Key, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { fetchCbrRates, CbrValute, POPULAR_CBR_CURRENCIES } from '../../services/cbrRates';
 import { 
   generateDecorFilePath, 
@@ -290,8 +290,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editUsername, setEditUsername] = useState('');
   const [editFullName, setEditFullName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   const [editIsActive, setEditIsActive] = useState<boolean>(true);
+  const [showEditPassword, setShowEditPassword] = useState<boolean>(false);
+
+  // Password modal state
+  const [pwdModalUser, setPwdModalUser] = useState<UserAccount | null>(null);
+  const [pwdModalValue, setPwdModalValue] = useState('');
+  const [pwdModalShow, setPwdModalShow] = useState(false);
+  const [pwdSuccessMessage, setPwdSuccessMessage] = useState<string | null>(null);
 
   const handleAddUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,6 +326,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setEditUsername(u.username);
     setEditFullName(u.fullName);
     setEditEmail(u.email);
+    setEditPassword('');
+    setShowEditPassword(false);
     setEditRole(u.role);
     setEditIsActive(u.isActive);
   };
@@ -327,6 +337,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setEditUsername('');
     setEditFullName('');
     setEditEmail('');
+    setEditPassword('');
+    setShowEditPassword(false);
     setEditRole('user');
     setEditIsActive(true);
   };
@@ -341,9 +353,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         email: editEmail.trim(),
         role: editRole,
         isActive: editIsActive,
+        ...(editPassword.trim() ? { password: editPassword.trim() } : {}),
       });
     }
     handleCancelEditUser();
+  };
+
+  const handleOpenPasswordModal = (u: UserAccount) => {
+    setPwdModalUser(u);
+    setPwdModalValue('');
+    setPwdModalShow(false);
+    setPwdSuccessMessage(null);
+  };
+
+  const handleClosePasswordModal = () => {
+    setPwdModalUser(null);
+    setPwdModalValue('');
+    setPwdModalShow(false);
+    setPwdSuccessMessage(null);
+  };
+
+  const handleGeneratePassword = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let res = '';
+    for (let i = 0; i < 10; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setPwdModalValue(res);
+    setPwdModalShow(true);
+  };
+
+  const handleSavePasswordModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pwdModalUser || !pwdModalValue.trim()) return;
+    if (onUpdateUser) {
+      onUpdateUser({
+        ...pwdModalUser,
+        password: pwdModalValue.trim(),
+      });
+    }
+    setPwdSuccessMessage(`Пароль для пользователя ${pwdModalUser.fullName} (@${pwdModalUser.username}) успешно изменен!`);
+    setTimeout(() => {
+      handleClosePasswordModal();
+    }, 1500);
   };
 
   if (userSession.role !== 'admin') {
@@ -1499,6 +1551,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Новый пароль</label>
+                          <div className="relative">
+                            <input
+                              type={showEditPassword ? "text" : "password"}
+                              placeholder="Оставить прежний (или ввести новый)"
+                              value={editPassword}
+                              onChange={(e) => setEditPassword(e.target.value)}
+                              className="w-full border border-slate-300 rounded-lg pl-2.5 pr-8 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowEditPassword(!showEditPassword)}
+                              className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                              title={showEditPassword ? "Скрыть" : "Показать"}
+                            >
+                              {showEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="block font-semibold text-slate-700 mb-1">Роль</label>
@@ -1529,76 +1601,183 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 }
 
                 return (
-                  <div key={u.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 hover:border-slate-300 transition">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm ${
-                          u.role === 'admin' 
-                            ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
-                            : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
-                        }`}>
-                          {initials}
+                  <div key={u.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 hover:border-slate-300 transition flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm ${
+                            u.role === 'admin' 
+                              ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
+                              : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
+                          }`}>
+                            {initials}
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">{u.fullName}</div>
+                            <div className="text-xs font-semibold text-slate-500">@{u.username}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-bold text-slate-900">{u.fullName}</div>
-                          <div className="text-xs font-semibold text-slate-500">@{u.username}</div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPasswordModal(u)}
+                            title="Сменить пароль"
+                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                          >
+                            <Key className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditUser(u)}
+                            title="Редактировать пользователя"
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          {onDeleteUser && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteUser(u.id)}
+                              title="Удалить пользователя"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleStartEditUser(u)}
-                          title="Редактировать пользователя"
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        {onDeleteUser && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteUser(u.id)}
-                            title="Удалить пользователя"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                      <div className="pt-2 border-t border-slate-200/80 space-y-1.5 text-xs text-slate-600">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 font-medium">Email:</span>
+                          <span className="font-semibold text-slate-800 truncate max-w-[180px]" title={u.email}>{u.email}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 font-medium">Роль:</span>
+                          {u.role === 'admin' ? (
+                            <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-md text-[11px]">
+                              <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Администратор
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-md text-[11px]">
+                              <UserCheck className="w-3.5 h-3.5 text-blue-600" /> Менеджер
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-slate-400 font-medium">Статус:</span>
+                          {u.isActive ? (
+                            <span className="text-emerald-600 font-bold flex items-center gap-1 text-[11px]">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Активен
+                            </span>
+                          ) : (
+                            <span className="text-rose-500 font-bold text-[11px]">Заблокирован</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-200/80 space-y-1.5 text-xs text-slate-600">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400 font-medium">Email:</span>
-                        <span className="font-semibold text-slate-800 truncate max-w-[180px]" title={u.email}>{u.email}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400 font-medium">Роль:</span>
-                        {u.role === 'admin' ? (
-                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-md text-[11px]">
-                            <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Администратор
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-md text-[11px]">
-                            <UserCheck className="w-3.5 h-3.5 text-blue-600" /> Менеджер
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-slate-400 font-medium">Статус:</span>
-                        {u.isActive ? (
-                          <span className="text-emerald-600 font-bold flex items-center gap-1 text-[11px]">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Активен
-                          </span>
-                        ) : (
-                          <span className="text-rose-500 font-bold text-[11px]">Заблокирован</span>
-                        )}
-                      </div>
+                    <div className="pt-3 border-t border-slate-200/60 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenPasswordModal(u)}
+                        className="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs py-1.5 px-3 rounded-lg border border-slate-200 transition flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <Key className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Сменить пароль</span>
+                      </button>
                     </div>
                   </div>
                 );
               })}
           </div>
+
+          {/* Change Password Modal */}
+          {pwdModalUser && (
+            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700">
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">Смена пароля</h3>
+                      <p className="text-xs font-semibold text-slate-500">{pwdModalUser.fullName} (@{pwdModalUser.username})</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClosePasswordModal}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {pwdSuccessMessage ? (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>{pwdSuccessMessage}</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSavePasswordModal} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Новый пароль *</label>
+                      <div className="relative">
+                        <input
+                          type={pwdModalShow ? "text" : "password"}
+                          required
+                          placeholder="Введите новый пароль"
+                          value={pwdModalValue}
+                          onChange={(e) => setPwdModalValue(e.target.value)}
+                          className="w-full text-xs font-semibold pl-3 pr-20 py-2.5 border border-slate-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="absolute right-2 top-2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPwdModalShow(!pwdModalShow)}
+                            className="p-1 text-slate-400 hover:text-slate-600"
+                            title={pwdModalShow ? "Скрыть" : "Показать"}
+                          >
+                            {pwdModalShow ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={handleGeneratePassword}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200/60 transition"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Сгенерировать</span>
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleClosePasswordModal}
+                          className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white rounded-lg shadow transition flex items-center gap-1.5"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>Сохранить</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
