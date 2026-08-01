@@ -297,6 +297,7 @@ export const App: React.FC = () => {
             userSession={userSession}
             currencies={currencies}
             selectedCurrency={selectedCurrency}
+            onSelectCurrency={setSelectedCurrency}
             onUpdateCurrencyRate={handleUpdateCurrencyRate}
             onAddCurrency={handleAddCurrency}
             onDeleteCurrency={handleDeleteCurrency}

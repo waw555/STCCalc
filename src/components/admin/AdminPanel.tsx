@@ -59,6 +59,7 @@ interface AdminPanelProps {
   onUpdateUser?: (user: UserAccount) => void;
   onDeleteUser?: (id: number) => void;
   selectedCurrency?: string;
+  onSelectCurrency?: (code: string) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -97,6 +98,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onUpdateUser,
   onDeleteUser,
   selectedCurrency = 'EUR',
+  onSelectCurrency,
 }) => {
   const [adminTab, setAdminTab] = useState<'panels' | 'decors' | 'formats' | 'thicknesses' | 'embossings' | 'mfg' | 'currencies' | 'services' | 'users' | 'org'>('panels');
 
@@ -200,6 +202,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     setPanelCurrency(newCurr);
     prevCurrencyRef.current = newCurr;
+    if (onSelectCurrency) {
+      onSelectCurrency(newCurr);
+    }
   };
 
   const handleCostPerM2Change = (val: number) => {
