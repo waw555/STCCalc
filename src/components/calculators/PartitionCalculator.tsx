@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Currency, Service, Manufacturer } from '../../types';
 import { DoorOpen, Plus, Trash2, Save, Check, FileText } from 'lucide-react';
 
@@ -27,36 +27,75 @@ export const PartitionCalculator: React.FC<PartitionCalculatorProps> = ({
   services,
   selectedCurrency,
 }) => {
-  const [objectName, setObjectName] = useState<string>('ТЦ "Галерея" — Туалетные кабины');
-  const [panelType, setPanelType] = useState<string>('hpl_12');
-
-  const [cabins, setCabins] = useState<CabinConfig[]>([
-    {
-      id: 'cab-1',
-      type: 'toilet_cabin',
-      name: 'Ряд из 3-х кабин (HPL 12мм)',
-      widthMm: 1000,
-      depthMm: 1500,
-      heightMm: 2000,
-      doorWidthMm: 600,
-      cabinsCount: 3,
-      hardwareKit: 'stc_stainless',
-    },
-    {
-      id: 'cab-2',
-      type: 'urinal_partition',
-      name: 'Писсуарные экраны',
-      widthMm: 400,
-      depthMm: 800,
-      heightMm: 1200,
-      doorWidthMm: 0,
-      cabinsCount: 2,
-      hardwareKit: 'stc_aluminum',
+  const [objectName, setObjectName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('stc_partition_object_name') || 'ТЦ "Галерея" — Туалетные кабины';
+    } catch {
+      return 'ТЦ "Галерея" — Туалетные кабины';
     }
-  ]);
+  });
+  const [panelType, setPanelType] = useState<string>(() => {
+    try {
+      return localStorage.getItem('stc_partition_panel_type') || 'hpl_12';
+    } catch {
+      return 'hpl_12';
+    }
+  });
 
-  const [includeInstallation, setIncludeInstallation] = useState<boolean>(true);
-  const [includeDelivery, setIncludeDelivery] = useState<boolean>(true);
+  const [cabins, setCabins] = useState<CabinConfig[]>(() => {
+    try {
+      const stored = localStorage.getItem('stc_partition_cabins');
+      return stored ? JSON.parse(stored) : [
+        {
+          id: 'cab-1',
+          type: 'toilet_cabin',
+          name: 'Ряд из 3-х кабин (HPL 12мм)',
+          widthMm: 1000,
+          depthMm: 1500,
+          heightMm: 2000,
+          doorWidthMm: 600,
+          cabinsCount: 3,
+          hardwareKit: 'stc_stainless',
+        },
+        {
+          id: 'cab-2',
+          type: 'urinal_partition',
+          name: 'Писсуарные экраны',
+          widthMm: 400,
+          depthMm: 800,
+          heightMm: 1200,
+          doorWidthMm: 0,
+          cabinsCount: 2,
+          hardwareKit: 'stc_aluminum',
+        }
+      ];
+    } catch {
+      return [];
+    }
+  });
+
+  const [includeInstallation, setIncludeInstallation] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('stc_partition_installation');
+      return stored !== null ? JSON.parse(stored) : true;
+    } catch {
+      return true;
+    }
+  });
+  const [includeDelivery, setIncludeDelivery] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('stc_partition_delivery');
+      return stored !== null ? JSON.parse(stored) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => { localStorage.setItem('stc_partition_object_name', objectName); }, [objectName]);
+  useEffect(() => { localStorage.setItem('stc_partition_panel_type', panelType); }, [panelType]);
+  useEffect(() => { localStorage.setItem('stc_partition_cabins', JSON.stringify(cabins)); }, [cabins]);
+  useEffect(() => { localStorage.setItem('stc_partition_installation', JSON.stringify(includeInstallation)); }, [includeInstallation]);
+  useEffect(() => { localStorage.setItem('stc_partition_delivery', JSON.stringify(includeDelivery)); }, [includeDelivery]);
 
   // Active currency rate
   const activeCurrencyRate = useMemo(() => {

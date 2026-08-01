@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Currency } from '../../types';
 import { Droplets, ShieldCheck, Check } from 'lucide-react';
 
@@ -8,10 +8,32 @@ interface SepticCalculatorProps {
 }
 
 export const SepticCalculator: React.FC<SepticCalculatorProps> = ({ currencies, selectedCurrency }) => {
-  const [peopleCount, setPeopleCount] = useState<number>(4);
-  const [soilType, setSoilType] = useState<string>('sand'); // sand, clay, loam
-  const [hasWashingMachine, setHasWashingMachine] = useState<boolean>(true);
-  const [hasBath, setHasBath] = useState<boolean>(true);
+  const [peopleCount, setPeopleCount] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem('stc_septic_people');
+      return s ? Number(s) : 4;
+    } catch { return 4; }
+  });
+  const [soilType, setSoilType] = useState<string>(() => {
+    try { return localStorage.getItem('stc_septic_soil') || 'sand'; } catch { return 'sand'; }
+  });
+  const [hasWashingMachine, setHasWashingMachine] = useState<boolean>(() => {
+    try {
+      const s = localStorage.getItem('stc_septic_washing');
+      return s !== null ? JSON.parse(s) : true;
+    } catch { return true; }
+  });
+  const [hasBath, setHasBath] = useState<boolean>(() => {
+    try {
+      const s = localStorage.getItem('stc_septic_bath');
+      return s !== null ? JSON.parse(s) : true;
+    } catch { return true; }
+  });
+
+  useEffect(() => { localStorage.setItem('stc_septic_people', String(peopleCount)); }, [peopleCount]);
+  useEffect(() => { localStorage.setItem('stc_septic_soil', soilType); }, [soilType]);
+  useEffect(() => { localStorage.setItem('stc_septic_washing', JSON.stringify(hasWashingMachine)); }, [hasWashingMachine]);
+  useEffect(() => { localStorage.setItem('stc_septic_bath', JSON.stringify(hasBath)); }, [hasBath]);
 
   const activeCurrencyRate = useMemo(() => {
     return currencies.find(c => c.code === selectedCurrency)?.rateToRub || 1;

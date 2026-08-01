@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Currency } from '../../types';
 import { Layers, Plus, Trash2, Shield, Check } from 'lucide-react';
 
@@ -8,10 +8,28 @@ interface SubsystemCalculatorProps {
 }
 
 export const SubsystemCalculator: React.FC<SubsystemCalculatorProps> = ({ currencies, selectedCurrency }) => {
-  const [facadeAreaM2, setFacadeAreaM2] = useState<number>(350);
-  const [enclosureType, setEnclosureType] = useState<string>('brick'); // Кирпич, Бетон, Пеноблок, Сендвич
-  const [fastenerType, setFastenerType] = useState<string>('anchor'); // Анкеры, Саморезы
-  const [profileType, setProfileType] = useState<string>('omega_aluminum'); // Омега-профиль алюминиевый / стальной
+  const [facadeAreaM2, setFacadeAreaM2] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem('stc_subsystem_area');
+      return s ? Number(s) : 350;
+    } catch {
+      return 350;
+    }
+  });
+  const [enclosureType, setEnclosureType] = useState<string>(() => {
+    try { return localStorage.getItem('stc_subsystem_enclosure') || 'brick'; } catch { return 'brick'; }
+  });
+  const [fastenerType, setFastenerType] = useState<string>(() => {
+    try { return localStorage.getItem('stc_subsystem_fastener') || 'anchor'; } catch { return 'anchor'; }
+  });
+  const [profileType, setProfileType] = useState<string>(() => {
+    try { return localStorage.getItem('stc_subsystem_profile') || 'omega_aluminum'; } catch { return 'omega_aluminum'; }
+  });
+
+  useEffect(() => { localStorage.setItem('stc_subsystem_area', String(facadeAreaM2)); }, [facadeAreaM2]);
+  useEffect(() => { localStorage.setItem('stc_subsystem_enclosure', enclosureType); }, [enclosureType]);
+  useEffect(() => { localStorage.setItem('stc_subsystem_fastener', fastenerType); }, [fastenerType]);
+  useEffect(() => { localStorage.setItem('stc_subsystem_profile', profileType); }, [profileType]);
 
   const activeCurrencyRate = useMemo(() => {
     return currencies.find(c => c.code === selectedCurrency)?.rateToRub || 1;

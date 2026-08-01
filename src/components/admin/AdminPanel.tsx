@@ -60,6 +60,7 @@ interface AdminPanelProps {
   onDeleteUser?: (id: number) => void;
   selectedCurrency?: string;
   onSelectCurrency?: (code: string) => void;
+  onResetAllData?: () => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -99,6 +100,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteUser,
   selectedCurrency = 'EUR',
   onSelectCurrency,
+  onResetAllData,
 }) => {
   const [adminTab, setAdminTab] = useState<'panels' | 'decors' | 'formats' | 'thicknesses' | 'embossings' | 'mfg' | 'currencies' | 'services' | 'users' | 'org'>('panels');
 
@@ -905,6 +907,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               >
                 <Settings className="w-4 h-4" /> Реквизиты компании
               </button>
+
+              {onResetAllData && (
+                <button
+                  type="button"
+                  onClick={onResetAllData}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ml-auto"
+                  title="Сбросить все сохраненные изменения к демо-базе данных"
+                >
+                  <RefreshCw className="w-4 h-4 text-rose-600" /> Сбросить базу данных
+                </button>
+              )}
             </div>
 
             {/* Sub-Navigation for Panel Database */}

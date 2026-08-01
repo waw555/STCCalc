@@ -44,31 +44,117 @@ import {
 } from './data/initialData';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('calc_countertops');
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('RUB');
+  // Helper to safely load data from localStorage
+  const loadStoredData = <T,>(key: string, fallback: T): T => {
+    try {
+      const item = localStorage.getItem(key);
+      if (item !== null) {
+        const parsed = JSON.parse(item);
+        if (parsed !== undefined && parsed !== null) {
+          return parsed as T;
+        }
+      }
+    } catch (err) {
+      console.error(`Error loading key "${key}" from localStorage:`, err);
+    }
+    return fallback;
+  };
+
+  const [activeTab, setActiveTab] = useState<TabType>(() => loadStoredData('stc_activeTab', 'calc_countertops'));
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(() => loadStoredData('stc_selectedCurrency', 'RUB'));
   const [isRefreshingRates, setIsRefreshingRates] = useState<boolean>(false);
 
   // Auth Session
-  const [userSession, setUserSession] = useState<UserSession>({
+  const [userSession, setUserSession] = useState<UserSession>(() => loadStoredData('stc_userSession', {
     isLoggedIn: true,
     username: 'admin',
     role: 'admin',
-  });
+  }));
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
-  // App Master Datasets
-  const [currencies, setCurrencies] = useState<Currency[]>(initialCurrencies);
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>(initialManufacturers);
-  const [embossings, setEmbossings] = useState<Embossing[]>(initialEmbossings);
-  const [panelSizes, setPanelSizes] = useState<PanelSize[]>(initialPanelSizes);
-  const [thicknesses, setThicknesses] = useState<PanelThickness[]>(initialThicknesses);
-  const [decors, setDecors] = useState<PanelFormat[]>(initialDecors);
-  const [countertopSettings, setCountertopSettings] = useState<CountertopSettings>(initialCountertopSettings);
-  const [productTypes, setProductTypes] = useState<ProductType[]>(initialProductTypes);
-  const [services, setServices] = useState<Service[]>(initialServices);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
-  const [organization, setOrganization] = useState<OrganizationSettings>(initialOrganization);
-  const [users, setUsers] = useState<UserAccount[]>(initialUsers);
+  // App Master Datasets with localStorage persistence
+  const [currencies, setCurrencies] = useState<Currency[]>(() => loadStoredData('stc_currencies', initialCurrencies));
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>(() => loadStoredData('stc_manufacturers', initialManufacturers));
+  const [embossings, setEmbossings] = useState<Embossing[]>(() => loadStoredData('stc_embossings', initialEmbossings));
+  const [panelSizes, setPanelSizes] = useState<PanelSize[]>(() => loadStoredData('stc_panelSizes', initialPanelSizes));
+  const [thicknesses, setThicknesses] = useState<PanelThickness[]>(() => loadStoredData('stc_thicknesses', initialThicknesses));
+  const [decors, setDecors] = useState<PanelFormat[]>(() => loadStoredData('stc_decors', initialDecors));
+  const [countertopSettings, setCountertopSettings] = useState<CountertopSettings>(() => loadStoredData('stc_countertopSettings', initialCountertopSettings));
+  const [productTypes, setProductTypes] = useState<ProductType[]>(() => loadStoredData('stc_productTypes', initialProductTypes));
+  const [services, setServices] = useState<Service[]>(() => loadStoredData('stc_services', initialServices));
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => loadStoredData('stc_suppliers', initialSuppliers));
+  const [organization, setOrganization] = useState<OrganizationSettings>(() => loadStoredData('stc_organization', initialOrganization));
+  const [users, setUsers] = useState<UserAccount[]>(() => loadStoredData('stc_users', initialUsers));
+
+  // Auto-save changes to localStorage
+  useEffect(() => { localStorage.setItem('stc_activeTab', JSON.stringify(activeTab)); }, [activeTab]);
+  useEffect(() => { localStorage.setItem('stc_selectedCurrency', JSON.stringify(selectedCurrency)); }, [selectedCurrency]);
+  useEffect(() => { localStorage.setItem('stc_userSession', JSON.stringify(userSession)); }, [userSession]);
+  useEffect(() => { localStorage.setItem('stc_currencies', JSON.stringify(currencies)); }, [currencies]);
+  useEffect(() => { localStorage.setItem('stc_manufacturers', JSON.stringify(manufacturers)); }, [manufacturers]);
+  useEffect(() => { localStorage.setItem('stc_embossings', JSON.stringify(embossings)); }, [embossings]);
+  useEffect(() => { localStorage.setItem('stc_panelSizes', JSON.stringify(panelSizes)); }, [panelSizes]);
+  useEffect(() => { localStorage.setItem('stc_thicknesses', JSON.stringify(thicknesses)); }, [thicknesses]);
+  useEffect(() => { localStorage.setItem('stc_decors', JSON.stringify(decors)); }, [decors]);
+  useEffect(() => { localStorage.setItem('stc_countertopSettings', JSON.stringify(countertopSettings)); }, [countertopSettings]);
+  useEffect(() => { localStorage.setItem('stc_productTypes', JSON.stringify(productTypes)); }, [productTypes]);
+  useEffect(() => { localStorage.setItem('stc_services', JSON.stringify(services)); }, [services]);
+  useEffect(() => { localStorage.setItem('stc_suppliers', JSON.stringify(suppliers)); }, [suppliers]);
+  useEffect(() => { localStorage.setItem('stc_organization', JSON.stringify(organization)); }, [organization]);
+  useEffect(() => { localStorage.setItem('stc_users', JSON.stringify(users)); }, [users]);
+
+  // Reset to Factory Default Data
+  const handleResetAllData = () => {
+    if (window.confirm('Вы уверены, что хотите сбросить все данные системы к исходным? Все сохраненные изменения будут удалены.')) {
+      const keys = [
+        'stc_currencies',
+        'stc_manufacturers',
+        'stc_embossings',
+        'stc_panelSizes',
+        'stc_thicknesses',
+        'stc_decors',
+        'stc_countertopSettings',
+        'stc_productTypes',
+        'stc_services',
+        'stc_suppliers',
+        'stc_organization',
+        'stc_users',
+        'stc_selectedCurrency',
+        'stc_activeTab',
+        'stc_saved_countertop_calcs',
+        'cbr_saved_cutting_calculations',
+        'stc_partition_object_name',
+        'stc_partition_panel_type',
+        'stc_partition_cabins',
+        'stc_partition_installation',
+        'stc_partition_delivery',
+        'stc_subsystem_area',
+        'stc_subsystem_enclosure',
+        'stc_subsystem_fastener',
+        'stc_subsystem_profile',
+        'stc_septic_people',
+        'stc_septic_soil',
+        'stc_septic_washing',
+        'stc_septic_bath'
+      ];
+      keys.forEach(k => localStorage.removeItem(k));
+      
+      setCurrencies(initialCurrencies);
+      setManufacturers(initialManufacturers);
+      setEmbossings(initialEmbossings);
+      setPanelSizes(initialPanelSizes);
+      setThicknesses(initialThicknesses);
+      setDecors(initialDecors);
+      setCountertopSettings(initialCountertopSettings);
+      setProductTypes(initialProductTypes);
+      setServices(initialServices);
+      setSuppliers(initialSuppliers);
+      setOrganization(initialOrganization);
+      setUsers(initialUsers);
+      setSelectedCurrency('RUB');
+      setActiveTab('calc_countertops');
+    }
+  };
 
   // Fetch live CBR rates on app load
   useEffect(() => {
@@ -330,6 +416,7 @@ export const App: React.FC = () => {
             onAddUser={handleAddUser}
             onUpdateUser={handleUpdateUser}
             onDeleteUser={handleDeleteUser}
+            onResetAllData={handleResetAllData}
           />
         )}
       </main>
