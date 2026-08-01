@@ -2,13 +2,16 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Currency } from '../../types';
 import { 
   Scissors, Plus, Trash2, Layers, Settings, Sparkles, Info, Ruler, 
-  CheckCircle2, AlertCircle, Save, FolderOpen, X, Check, FileText, Calendar, RefreshCw
+  CheckCircle2, AlertCircle, Save, FolderOpen, X, Check, FileText, Calendar, RefreshCw,
+  RotateCw, ArrowLeftRight, ArrowUpDown, Maximize2, Grid, Eye, ZoomIn, Compass, Shield
 } from 'lucide-react';
 
 interface CuttingCalculatorProps {
   currencies: Currency[];
   selectedCurrency: string;
 }
+
+export type CuttingStrategy = 'length' | 'width' | 'optimal';
 
 export interface StockSheet {
   id: string;
@@ -25,6 +28,39 @@ export interface Piece {
   widthMm: number;
   heightMm: number;
   qty: number;
+  canRotate: boolean; // Можно поворачивать деталь при раскрое
+}
+
+export interface PlacedPiece {
+  id: string;
+  pieceId: string;
+  pieceIndex: number;
+  note: string;
+  xMm: number;
+  yMm: number;
+  placedWidthMm: number;
+  placedHeightMm: number;
+  origWidthMm: number;
+  origHeightMm: number;
+  isRotated: boolean;
+  color: string;
+}
+
+export interface SheetLayout {
+  id: string;
+  sheetId: string;
+  sheetName: string;
+  sheetNumber: number;
+  lengthMm: number;
+  widthMm: number;
+  trimmingMm: number;
+  effectiveLengthMm: number;
+  effectiveWidthMm: number;
+  placedPieces: PlacedPiece[];
+  usedAreaM2: number;
+  effectiveAreaM2: number;
+  wasteAreaM2: number;
+  wastePercent: number;
 }
 
 export interface SavedCuttingCalculation {
@@ -34,6 +70,7 @@ export interface SavedCuttingCalculation {
   createdAt: string;
   kerfMm: number;
   cuttingPricePerMeterRub: number;
+  strategy?: CuttingStrategy;
   stockSheets: StockSheet[];
   pieces: Piece[];
   totalCutCostRub: number;
@@ -43,10 +80,334 @@ export interface SavedCuttingCalculation {
 
 const STORAGE_KEY = 'cbr_saved_cutting_calculations';
 
+const PIECE_COLORS = [
+  '#2563eb', // Blue
+  '#059669', // Emerald
+  '#d97706', // Amber
+  '#db2777', // Pink
+  '#7c3aed', // Purple
+  '#0891b2', // Cyan
+  '#ea580c', // Orange
+  '#65a30d', // Lime
+  '#4f46e5', // Indigo
+  '#0d9488', // Teal
+];
+
+interface UnplacedItem {
+  pieceId: string;
+  pieceIndex: number;
+  note: string;
+  widthMm: number;
+  heightMm: number;
+  canRotate: boolean;
+  color: string;
+}
+
+// 2D Nesting & Packing Algorithm supporting Kerf, Trimming, Rotation, and 3 Cutting Strategies
+export function calculateCuttingLayout(
+  stockSheets: StockSheet[],
+  pieces: Piece[],
+  kerfMm: number,
+  strategy: CuttingStrategy
+): {
+  sheetLayouts: SheetLayout[];
+  unplacedItems: UnplacedItem[];
+  totalPiecesPlaced: number;
+  totalPiecesCount: number;
+  totalLinearCutMeters: number;
+} {
+  // 1. Flatten pieces into individual item instances
+  const itemsToPlace: UnplacedItem[] = [];
+  pieces.forEach((p, pIdx) => {
+    const color = PIECE_COLORS[pIdx % PIECE_COLORS.length];
+    for (let i = 0; i < p.qty; i++) {
+      itemsToPlace.push({
+        pieceId: p.id,
+        pieceIndex: pIdx + 1,
+        note: p.note,
+        widthMm: p.widthMm,
+        heightMm: p.heightMm,
+        canRotate: p.canRotate !== false,
+        color,
+      });
+    }
+  });
+
+  const totalPiecesCount = itemsToPlace.length;
+
+  // Sort items based on selected strategy
+  if (strategy === 'length') {
+    // Sort primarily by height to create longitudinal rows along sheet length
+    itemsToPlace.sort((a, b) => Math.max(b.widthMm, b.heightMm) - Math.max(a.widthMm, a.heightMm));
+  } else if (strategy === 'width') {
+    // Sort primarily by width to create transverse columns along sheet width
+    itemsToPlace.sort((a, b) => Math.max(b.widthMm, b.heightMm) - Math.max(a.widthMm, a.heightMm));
+  } else {
+    // Optimal: Sort by area descending
+    itemsToPlace.sort((a, b) => (b.widthMm * b.heightMm) - (a.widthMm * a.heightMm));
+  }
+
+  // 2. Prepare stock sheets pool and placement
+  const sheetLayouts: SheetLayout[] = [];
+  const remainingItems = [...itemsToPlace];
+  let sheetSequence = 1;
+
+  const usedSheetCounts: Record<string, number> = {};
+  stockSheets.forEach(s => { usedSheetCounts[s.id] = 0; });
+
+  let stockIndex = 0;
+
+  while (remainingItems.length > 0) {
+    // Pick available stock sheet definition
+    let currentStockDef: StockSheet | null = null;
+
+    for (let idx = 0; idx < stockSheets.length; idx++) {
+      const s = stockSheets[(stockIndex + idx) % stockSheets.length];
+      const isUnlimited = s.maxQty === null || s.maxQty === undefined || s.maxQty === 0;
+      const currentUsed = usedSheetCounts[s.id] || 0;
+
+      if (isUnlimited || currentUsed < Number(s.maxQty)) {
+        currentStockDef = s;
+        break;
+      }
+    }
+
+    if (!currentStockDef) {
+      // Inventory exhausted
+      break;
+    }
+
+    usedSheetCounts[currentStockDef.id] = (usedSheetCounts[currentStockDef.id] || 0) + 1;
+
+    const trimming = currentStockDef.trimmingMm || 0;
+    const effLen = Math.max(0, currentStockDef.lengthMm - 2 * trimming);
+    const effWid = Math.max(0, currentStockDef.widthMm - 2 * trimming);
+
+    if (effLen <= 0 || effWid <= 0) {
+      break;
+    }
+
+    let freeRects = [{ x: 0, y: 0, w: effLen, h: effWid }];
+    const placedOnThisSheet: PlacedPiece[] = [];
+    let itemsPlacedThisSheetCount = 0;
+
+    let itemIdx = 0;
+    while (itemIdx < remainingItems.length) {
+      const item = remainingItems[itemIdx];
+
+      type Orientation = { w: number; h: number; rotated: boolean };
+      const orientations: Orientation[] = [];
+
+      if (strategy === 'length') {
+        // Prefer orientation where longer side aligns with sheet length (w >= h)
+        if (item.canRotate && item.widthMm !== item.heightMm) {
+          if (item.widthMm >= item.heightMm) {
+            orientations.push({ w: item.widthMm, h: item.heightMm, rotated: false });
+            orientations.push({ w: item.heightMm, h: item.widthMm, rotated: true });
+          } else {
+            orientations.push({ w: item.heightMm, h: item.widthMm, rotated: true });
+            orientations.push({ w: item.widthMm, h: item.heightMm, rotated: false });
+          }
+        } else {
+          orientations.push({ w: item.widthMm, h: item.heightMm, rotated: false });
+        }
+      } else if (strategy === 'width') {
+        // Prefer orientation where longer side aligns with sheet width (h >= w)
+        if (item.canRotate && item.widthMm !== item.heightMm) {
+          if (item.heightMm >= item.widthMm) {
+            orientations.push({ w: item.widthMm, h: item.heightMm, rotated: false });
+            orientations.push({ w: item.heightMm, h: item.widthMm, rotated: true });
+          } else {
+            orientations.push({ w: item.heightMm, h: item.widthMm, rotated: true });
+            orientations.push({ w: item.widthMm, h: item.heightMm, rotated: false });
+          }
+        } else {
+          orientations.push({ w: item.widthMm, h: item.heightMm, rotated: false });
+        }
+      } else {
+        // Optimal Strategy
+        orientations.push({ w: item.widthMm, h: item.heightMm, rotated: false });
+        if (item.canRotate && item.widthMm !== item.heightMm) {
+          orientations.push({ w: item.heightMm, h: item.widthMm, rotated: true });
+        }
+      }
+
+      // Find best fitting free rectangle
+      let bestFit: {
+        freeRectIdx: number;
+        orientation: Orientation;
+        score: number;
+      } | null = null;
+
+      for (let rIdx = 0; rIdx < freeRects.length; rIdx++) {
+        const rect = freeRects[rIdx];
+        for (const ori of orientations) {
+          if (ori.w <= rect.w && ori.h <= rect.h) {
+            let score = 0;
+            if (strategy === 'length') {
+              score = rect.y * 10000 + rect.x + Math.abs(rect.h - ori.h);
+            } else if (strategy === 'width') {
+              score = rect.x * 10000 + rect.y + Math.abs(rect.w - ori.w);
+            } else {
+              // Best Short Side Fit
+              const leftoverW = rect.w - ori.w;
+              const leftoverH = rect.h - ori.h;
+              score = Math.min(leftoverW, leftoverH);
+            }
+
+            if (bestFit === null || score < bestFit.score) {
+              bestFit = { freeRectIdx: rIdx, orientation: ori, score };
+            }
+          }
+        }
+      }
+
+      if (bestFit) {
+        const targetRect = freeRects[bestFit.freeRectIdx];
+        const ori = bestFit.orientation;
+
+        placedOnThisSheet.push({
+          id: `placed-${Date.now()}-${sheetSequence}-${itemsPlacedThisSheetCount}`,
+          pieceId: item.pieceId,
+          pieceIndex: item.pieceIndex,
+          note: item.note,
+          xMm: targetRect.x,
+          yMm: targetRect.y,
+          placedWidthMm: ori.w,
+          placedHeightMm: ori.h,
+          origWidthMm: item.widthMm,
+          origHeightMm: item.heightMm,
+          isRotated: ori.rotated,
+          color: item.color,
+        });
+
+        // Split free rectangle with kerf offset
+        const usedW = ori.w + kerfMm;
+        const usedH = ori.h + kerfMm;
+
+        const newRects: Array<{ x: number; y: number; w: number; h: number }> = [];
+
+        if (strategy === 'length') {
+          // Horizontal cuts preference
+          if (targetRect.w - usedW > 0) {
+            newRects.push({
+              x: targetRect.x + usedW,
+              y: targetRect.y,
+              w: targetRect.w - usedW,
+              h: ori.h,
+            });
+          }
+          if (targetRect.h - usedH > 0) {
+            newRects.push({
+              x: targetRect.x,
+              y: targetRect.y + usedH,
+              w: targetRect.w,
+              h: targetRect.h - usedH,
+            });
+          }
+        } else if (strategy === 'width') {
+          // Vertical cuts preference
+          if (targetRect.h - usedH > 0) {
+            newRects.push({
+              x: targetRect.x,
+              y: targetRect.y + usedH,
+              w: ori.w,
+              h: targetRect.h - usedH,
+            });
+          }
+          if (targetRect.w - usedW > 0) {
+            newRects.push({
+              x: targetRect.x + usedW,
+              y: targetRect.y,
+              w: targetRect.w - usedW,
+              h: targetRect.h,
+            });
+          }
+        } else {
+          // Optimal: Smaller remnant first
+          const remW = targetRect.w - usedW;
+          const remH = targetRect.h - usedH;
+          if (remW < remH) {
+            if (remW > 0) {
+              newRects.push({ x: targetRect.x + usedW, y: targetRect.y, w: remW, h: ori.h });
+            }
+            if (remH > 0) {
+              newRects.push({ x: targetRect.x, y: targetRect.y + usedH, w: targetRect.w, h: remH });
+            }
+          } else {
+            if (remH > 0) {
+              newRects.push({ x: targetRect.x, y: targetRect.y + usedH, w: ori.w, h: remH });
+            }
+            if (remW > 0) {
+              newRects.push({ x: targetRect.x + usedW, y: targetRect.y, w: remW, h: targetRect.h });
+            }
+          }
+        }
+
+        freeRects.splice(bestFit.freeRectIdx, 1, ...newRects);
+        freeRects = freeRects.filter(r => r.w >= 20 && r.h >= 20);
+
+        remainingItems.splice(itemIdx, 1);
+        itemsPlacedThisSheetCount++;
+      } else {
+        itemIdx++;
+      }
+    }
+
+    if (itemsPlacedThisSheetCount === 0) {
+      break;
+    }
+
+    const effectiveAreaM2 = (effLen * effWid) / 1000000;
+    const usedAreaM2 = placedOnThisSheet.reduce((acc, p) => acc + (p.placedWidthMm * p.placedHeightMm) / 1000000, 0);
+    const wasteAreaM2 = Math.max(0, effectiveAreaM2 - usedAreaM2);
+    const wastePercent = effectiveAreaM2 > 0 ? (wasteAreaM2 / effectiveAreaM2) * 100 : 0;
+
+    sheetLayouts.push({
+      id: `layout-${sheetSequence}`,
+      sheetId: currentStockDef.id,
+      sheetName: currentStockDef.name,
+      sheetNumber: sheetSequence,
+      lengthMm: currentStockDef.lengthMm,
+      widthMm: currentStockDef.widthMm,
+      trimmingMm: currentStockDef.trimmingMm,
+      effectiveLengthMm: effLen,
+      effectiveWidthMm: effWid,
+      placedPieces: placedOnThisSheet,
+      usedAreaM2,
+      effectiveAreaM2,
+      wasteAreaM2,
+      wastePercent,
+    });
+
+    sheetSequence++;
+  }
+
+  // Linear cut length calculation
+  let totalLinearCutMeters = 0;
+  sheetLayouts.forEach(layout => {
+    layout.placedPieces.forEach(p => {
+      totalLinearCutMeters += (p.placedWidthMm + p.placedHeightMm) / 1000;
+    });
+    if (layout.trimmingMm > 0) {
+      totalLinearCutMeters += (layout.lengthMm + layout.widthMm) * 2 / 1000;
+    }
+  });
+
+  return {
+    sheetLayouts,
+    unplacedItems: remainingItems,
+    totalPiecesPlaced: totalPiecesCount - remainingItems.length,
+    totalPiecesCount,
+    totalLinearCutMeters,
+  };
+}
+
 export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies, selectedCurrency }) => {
   // Global Cutting Parameters
   const [kerfMm, setKerfMm] = useState<number>(4.0);
   const [cuttingPricePerMeterRub, setCuttingPricePerMeterRub] = useState<number>(250);
+  const [strategy, setStrategy] = useState<CuttingStrategy>('optimal');
 
   // Stock Sheets List
   const [stockSheets, setStockSheets] = useState<StockSheet[]>([
@@ -70,9 +431,9 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
 
   // Pieces List
   const [pieces, setPieces] = useState<Piece[]>([
-    { id: 'p1', note: 'Фасадные панели', widthMm: 600, heightMm: 1200, qty: 4 },
-    { id: 'p2', note: 'Боковины шкафа', widthMm: 450, heightMm: 800, qty: 6 },
-    { id: 'p3', note: 'Полки', widthMm: 350, heightMm: 600, qty: 8 },
+    { id: 'p1', note: 'Фасадные панели', widthMm: 600, heightMm: 1200, qty: 4, canRotate: true },
+    { id: 'p2', note: 'Боковины шкафа', widthMm: 450, heightMm: 800, qty: 6, canRotate: true },
+    { id: 'p3', note: 'Полки', widthMm: 350, heightMm: 600, qty: 8, canRotate: false },
   ]);
 
   // Saved calculations state
@@ -84,6 +445,10 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
       return [];
     }
   });
+
+  // Cutting Map view mode state
+  const [activeSheetTab, setActiveSheetTab] = useState<string>('all');
+  const [zoomModalSheet, setZoomModalSheet] = useState<SheetLayout | null>(null);
 
   // Save Modal & Toast States
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -133,7 +498,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
   };
 
   const handleDeleteStockSheet = (id: string) => {
-    if (stockSheets.length <= 1) return; // keep at least 1
+    if (stockSheets.length <= 1) return;
     setStockSheets(prev => prev.filter(s => s.id !== id));
   };
 
@@ -145,6 +510,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
       widthMm: 500,
       heightMm: 1000,
       qty: 1,
+      canRotate: true,
     }]);
   };
 
@@ -156,75 +522,27 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
     setPieces(prev => prev.filter(p => p.id !== id));
   };
 
-  // Math Calculations: Piece area, stock allocation, linear cut length, cost
-  const calculation = useMemo(() => {
+  // Execute 2D layout nesting calculation
+  const layoutResult = useMemo(() => {
+    const res = calculateCuttingLayout(stockSheets, pieces, kerfMm, strategy);
+    const totalCutCostRub = res.totalLinearCutMeters * cuttingPricePerMeterRub;
+
     let totalPieceAreaM2 = 0;
-    let totalLinearCutMeters = 0;
-    let totalPiecesCount = 0;
-
     pieces.forEach(p => {
-      const area = (p.widthMm * p.heightMm / 1000000) * p.qty;
-      totalPieceAreaM2 += area;
-      totalPiecesCount += p.qty;
-      const perimeterM = ((p.widthMm + p.heightMm) * 2 / 1000) * p.qty;
-      totalLinearCutMeters += (perimeterM / 2);
+      totalPieceAreaM2 += (p.widthMm * p.heightMm / 1000000) * p.qty;
     });
 
-    const requiredGrossAreaM2 = totalPieceAreaM2 * 1.12;
-    let remainingAreaToCoverM2 = requiredGrossAreaM2;
-
-    const sheetAllocations = stockSheets.map(sheet => {
-      const trimming = sheet.trimmingMm || 0;
-      const effectiveLengthMm = Math.max(0, sheet.lengthMm - 2 * trimming);
-      const effectiveWidthMm = Math.max(0, sheet.widthMm - 2 * trimming);
-      const effectiveAreaM2 = (effectiveLengthMm * effectiveWidthMm) / 1000000;
-      const grossAreaM2 = (sheet.lengthMm * sheet.widthMm) / 1000000;
-
-      const isUnlimited = sheet.maxQty === null || sheet.maxQty === undefined || sheet.maxQty === 0;
-      const maxAvailableQty = isUnlimited ? Infinity : Math.max(0, Number(sheet.maxQty));
-
-      let usedQty = 0;
-
-      if (remainingAreaToCoverM2 > 0 && effectiveAreaM2 > 0 && maxAvailableQty > 0) {
-        if (isUnlimited) {
-          usedQty = Math.ceil(remainingAreaToCoverM2 / effectiveAreaM2);
-          remainingAreaToCoverM2 = 0;
-        } else {
-          const neededQty = Math.ceil(remainingAreaToCoverM2 / effectiveAreaM2);
-          usedQty = Math.min(neededQty, maxAvailableQty);
-          remainingAreaToCoverM2 = Math.max(0, remainingAreaToCoverM2 - usedQty * effectiveAreaM2);
-        }
-      }
-
-      return {
-        ...sheet,
-        effectiveLengthMm,
-        effectiveWidthMm,
-        effectiveAreaM2,
-        grossAreaM2,
-        isUnlimited,
-        maxAvailableQty,
-        usedQty,
-        totalUsedEffectiveAreaM2: usedQty * effectiveAreaM2,
-      };
-    });
-
-    const isFullyCovered = remainingAreaToCoverM2 <= 0.001;
-    const totalSheetsUsed = sheetAllocations.reduce((acc, s) => acc + s.usedQty, 0);
-    const totalCutCostRub = totalLinearCutMeters * cuttingPricePerMeterRub;
+    const totalSheetsUsed = res.sheetLayouts.length;
+    const isFullyCovered = res.unplacedItems.length === 0;
 
     return {
+      ...res,
       totalPieceAreaM2,
-      totalPiecesCount,
-      totalLinearCutMeters,
-      requiredGrossAreaM2,
-      sheetAllocations,
-      isFullyCovered,
-      remainingUncoveredAreaM2: remainingAreaToCoverM2,
       totalSheetsUsed,
       totalCutCostRub,
+      isFullyCovered,
     };
-  }, [pieces, stockSheets, cuttingPricePerMeterRub]);
+  }, [stockSheets, pieces, kerfMm, strategy, cuttingPricePerMeterRub]);
 
   // Handle Save Action
   const handleOpenSaveModal = () => {
@@ -251,11 +569,12 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
       }),
       kerfMm,
       cuttingPricePerMeterRub,
+      strategy,
       stockSheets: JSON.parse(JSON.stringify(stockSheets)),
       pieces: JSON.parse(JSON.stringify(pieces)),
-      totalCutCostRub: calculation.totalCutCostRub,
-      totalSheetsUsed: calculation.totalSheetsUsed,
-      totalPiecesCount: calculation.totalPiecesCount,
+      totalCutCostRub: layoutResult.totalCutCostRub,
+      totalSheetsUsed: layoutResult.totalSheetsUsed,
+      totalPiecesCount: layoutResult.totalPiecesCount,
     };
 
     setSavedCalcs(prev => [newSavedItem, ...prev]);
@@ -266,8 +585,9 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
   const handleLoadSavedCalc = (saved: SavedCuttingCalculation) => {
     setKerfMm(saved.kerfMm);
     setCuttingPricePerMeterRub(saved.cuttingPricePerMeterRub);
+    if (saved.strategy) setStrategy(saved.strategy);
     setStockSheets(saved.stockSheets);
-    setPieces(saved.pieces);
+    setPieces(saved.pieces.map(p => ({ ...p, canRotate: p.canRotate !== false })));
     showToast(`Загружен раскрой: «${saved.title}»`);
   };
 
@@ -281,6 +601,171 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
     setTimeout(() => {
       setToastMessage(null);
     }, 4500);
+  };
+
+  // Helper renderer for a single sheet cutting map canvas
+  const renderSheetCanvas = (sheet: SheetLayout, isZoomed: boolean = false) => {
+    const scaleLen = sheet.lengthMm;
+    const scaleWid = sheet.widthMm;
+    const trimmingPctX = (sheet.trimmingMm / scaleLen) * 100;
+    const trimmingPctY = (sheet.trimmingMm / scaleWid) * 100;
+    const effPctX = (sheet.effectiveLengthMm / scaleLen) * 100;
+    const effPctY = (sheet.effectiveWidthMm / scaleWid) * 100;
+
+    return (
+      <div className="space-y-3">
+        {/* Sheet Card Top Specs */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-100 p-3 rounded-xl text-xs text-slate-700 font-semibold border border-slate-200">
+          <div className="flex items-center gap-2">
+            <span className="bg-rose-600 text-white font-black px-2.5 py-1 rounded-lg">
+              Лист №{sheet.sheetNumber}
+            </span>
+            <span className="font-bold text-slate-900">{sheet.sheetName}</span>
+            <span className="text-slate-400">({sheet.lengthMm} × {sheet.widthMm} мм)</span>
+            {sheet.trimmingMm > 0 && (
+              <span className="text-[11px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-300">
+                Торцевание: {sheet.trimmingMm} мм
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-right">
+            <div>
+              <span className="text-slate-400">Использовано: </span>
+              <span className="font-extrabold text-emerald-600">
+                {sheet.usedAreaM2.toFixed(2)} м² ({(100 - sheet.wastePercent).toFixed(1)}%)
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400">Отходы: </span>
+              <span className="font-extrabold text-rose-500">
+                {sheet.wasteAreaM2.toFixed(2)} м² ({sheet.wastePercent.toFixed(1)}%)
+              </span>
+            </div>
+            {!isZoomed && (
+              <button
+                type="button"
+                onClick={() => setZoomModalSheet(sheet)}
+                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-white rounded-lg transition"
+                title="Увеличить карту листа"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Visual Map Canvas Container */}
+        <div 
+          className={`relative bg-slate-900 rounded-2xl p-4 border-2 border-slate-800 overflow-hidden shadow-inner ${
+            isZoomed ? 'h-[650px]' : 'h-[360px] sm:h-[420px]'
+          }`}
+        >
+          {/* Inner Sheet Area */}
+          <div className="relative w-full h-full flex items-center justify-center p-2">
+            <div 
+              className="relative bg-slate-800 border-2 border-slate-600 rounded-lg shadow-2xl overflow-hidden"
+              style={{
+                width: '100%',
+                height: '100%',
+                aspectRatio: `${scaleLen} / ${scaleWid}`,
+                maxHeight: '100%',
+                maxWidth: '100%',
+              }}
+            >
+              {/* Outer Dimensions Labels */}
+              <div className="absolute top-1 left-2 text-[10px] font-bold text-slate-400 tracking-wider uppercase z-20 pointer-events-none">
+                Длина: {sheet.lengthMm} мм
+              </div>
+              <div className="absolute top-1/2 left-1 -translate-y-1/2 -rotate-90 text-[10px] font-bold text-slate-400 tracking-wider uppercase z-20 pointer-events-none origin-left">
+                Ширина: {sheet.widthMm} мм
+              </div>
+
+              {/* Trimming Frame Margin (if trimming > 0) */}
+              {sheet.trimmingMm > 0 && (
+                <div 
+                  className="absolute border border-dashed border-rose-400/60 bg-rose-950/20 z-10 pointer-events-none flex items-center justify-center"
+                  style={{
+                    left: `${trimmingPctX}%`,
+                    top: `${trimmingPctY}%`,
+                    width: `${effPctX}%`,
+                    height: `${effPctY}%`,
+                  }}
+                >
+                  <span className="absolute bottom-1 right-2 text-[9px] font-semibold text-rose-300 opacity-75">
+                    Полезная зона ({sheet.effectiveLengthMm} × {sheet.effectiveWidthMm} мм)
+                  </span>
+                </div>
+              )}
+
+              {/* Usable Area Box placing items */}
+              <div 
+                className="absolute"
+                style={{
+                  left: `${trimmingPctX}%`,
+                  top: `${trimmingPctY}%`,
+                  width: `${effPctX}%`,
+                  height: `${effPctY}%`,
+                }}
+              >
+                {sheet.placedPieces.map((p, pIndex) => {
+                  const leftPct = (p.xMm / sheet.effectiveLengthMm) * 100;
+                  const topPct = (p.yMm / sheet.effectiveWidthMm) * 100;
+                  const widthPct = (p.placedWidthMm / sheet.effectiveLengthMm) * 100;
+                  const heightPct = (p.placedHeightMm / sheet.effectiveWidthMm) * 100;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="absolute border border-white/90 rounded p-1 flex flex-col items-center justify-center text-center text-white transition-all hover:z-30 hover:scale-[1.02] hover:shadow-2xl overflow-hidden group"
+                      style={{
+                        left: `${leftPct}%`,
+                        top: `${topPct}%`,
+                        width: `${widthPct}%`,
+                        height: `${heightPct}%`,
+                        backgroundColor: p.color,
+                        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.3)',
+                      }}
+                      title={`${p.note} (#${p.pieceIndex})\nГабариты: ${p.placedWidthMm} × ${p.placedHeightMm} мм\nОригинал: ${p.origWidthMm} × ${p.origHeightMm} мм\n${p.isRotated ? 'Повернуто 90°' : 'Исходная ориентация'}`}
+                    >
+                      <div className="font-extrabold text-[11px] sm:text-xs leading-tight drop-shadow truncate w-full px-1">
+                        #{p.pieceIndex} {p.note}
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[10px] font-bold bg-black/40 px-1.5 py-0.5 rounded mt-0.5 backdrop-blur-xs">
+                        {p.isRotated ? (
+                          <span className="flex items-center gap-0.5 text-amber-300 font-black">
+                            <RotateCw className="w-3 h-3 animate-spin-slow" /> 90°
+                          </span>
+                        ) : (
+                          <span className="text-slate-200">
+                            {p.placedWidthMm >= p.placedHeightMm ? '↔' : '↕'}
+                          </span>
+                        )}
+                        <span>{p.placedWidthMm} × {p.placedHeightMm}</span>
+                      </div>
+
+                      {/* Hover Overlay detail view */}
+                      <div className="absolute inset-0 bg-slate-900/90 text-white p-2 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-40 text-xs space-y-1">
+                        <div className="font-bold text-amber-300">Деталь #{p.pieceIndex}</div>
+                        <div className="font-semibold text-white">{p.note}</div>
+                        <div className="text-[11px] text-slate-300">
+                          {p.placedWidthMm} × {p.placedHeightMm} мм
+                        </div>
+                        {p.isRotated && (
+                          <div className="text-[10px] bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded font-bold">
+                            Повернуто на 90°
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -300,22 +785,22 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
         </div>
       )}
 
-      {/* Banner */}
+      {/* Main Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white rounded-2xl p-6 shadow-xl border border-slate-800">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-bold uppercase tracking-wider text-rose-400 bg-rose-950/80 border border-rose-800/80 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <Scissors className="w-3.5 h-3.5" />
-                Мульти-форматный раскрой плит
+                Интерактивная карта раскроя плит
               </span>
-              <span className="text-xs text-slate-400">HPL и Компакт-пластик</span>
+              <span className="text-xs text-slate-400">HPL, МДФ, Компакт-пластик</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Калькулятор раскроя и отходов
+              Калькулятор и карта раскроя
             </h1>
             <p className="text-sm text-slate-300 mt-1 max-w-2xl">
-              Гибкий расчёт с поддержкой нескольких исходных форматов плит, лимитов наличия, торцевания и общего тарифа пила.
+              Визуализация расположения деталей на листах с контролем поворота 90°, 3 типами раскроя и учётом толщины пропила.
             </p>
           </div>
 
@@ -341,7 +826,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
         </div>
       </div>
 
-      {/* Saved Calculations Drawer / Section */}
+      {/* Saved Calculations Drawer */}
       {showSavedList && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-white space-y-4 animate-fade-in">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -389,10 +874,12 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                       <strong className="text-white">{item.totalSheetsUsed} шт.</strong>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Всего деталей:</span>
-                      <strong className="text-white">{item.totalPiecesCount} шт.</strong>
+                      <span className="text-slate-400">Стратегия:</span>
+                      <strong className="text-amber-300">
+                        {item.strategy === 'length' ? 'По длине' : item.strategy === 'width' ? 'По ширине' : 'Оптимально'}
+                      </strong>
                     </div>
-                    <div className="flex justify-between pt-1 border-t border-slate-800">
+                    <div className="flex justify-between border-t border-slate-800 pt-1">
                       <span className="text-slate-400 font-semibold">Стоимость реза:</span>
                       <strong className="text-rose-400 font-extrabold">{formatCurrency(item.totalCutCostRub)}</strong>
                     </div>
@@ -415,20 +902,102 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
       {/* Top Controls: Global Parameters & Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Box 1: Global Cutting Settings */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
+        {/* Box 1: Global Cutting Settings & 3 Strategy Modes */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Settings className="w-5 h-5 text-rose-600" />
-              <span>Общие параметры раскроя</span>
+              <span>Общие параметры и тип раскроя</span>
             </h2>
-            <span className="text-xs text-slate-400 font-medium">Применяются ко всему заказу</span>
+            <span className="text-xs text-slate-400 font-medium">Алгоритм размещения деталей</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Strategy Selection Buttons (3 Strategy Modes) */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+              Тип (стратегия) раскроя *
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+              {/* Strategy 1: По длине */}
+              <button
+                type="button"
+                onClick={() => setStrategy('length')}
+                className={`p-3.5 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                  strategy === 'length'
+                    ? 'bg-rose-50/80 border-rose-500 ring-2 ring-rose-500/20 text-rose-950 shadow-sm'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100/60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-extrabold text-xs sm:text-sm flex items-center gap-1.5">
+                    <ArrowLeftRight className="w-4 h-4 text-rose-600" />
+                    По длине
+                  </span>
+                  {strategy === 'length' && (
+                    <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Размещение продольными полосами вдоль длинной стороны листа.
+                </p>
+              </button>
+
+              {/* Strategy 2: По ширине */}
+              <button
+                type="button"
+                onClick={() => setStrategy('width')}
+                className={`p-3.5 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                  strategy === 'width'
+                    ? 'bg-rose-50/80 border-rose-500 ring-2 ring-rose-500/20 text-rose-950 shadow-sm'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100/60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-extrabold text-xs sm:text-sm flex items-center gap-1.5">
+                    <ArrowUpDown className="w-4 h-4 text-rose-600" />
+                    По ширине
+                  </span>
+                  {strategy === 'width' && (
+                    <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Размещение поперечными полосами вдоль короткой стороны листа.
+                </p>
+              </button>
+
+              {/* Strategy 3: Оптимально */}
+              <button
+                type="button"
+                onClick={() => setStrategy('optimal')}
+                className={`p-3.5 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                  strategy === 'optimal'
+                    ? 'bg-rose-50/80 border-rose-500 ring-2 ring-rose-500/20 text-rose-950 shadow-sm'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100/60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-extrabold text-xs sm:text-sm flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-rose-600" />
+                    Оптимально
+                  </span>
+                  {strategy === 'optimal' && (
+                    <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Минимальные отходы (2D Bin Packing). Максимально эффективный раскрой.
+                </p>
+              </button>
+
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Пропил пилы (мм)
+                Пропил пилы (толщина диска)
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -442,7 +1011,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                 <span className="text-xs font-semibold text-slate-500">мм</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                Толщина пильного диска. Учитывается при калибровке каждого реза.
+                Ширина реза между деталями.
               </p>
             </div>
 
@@ -461,7 +1030,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                 <span className="text-xs font-semibold text-slate-500">₽/м.п.</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                Стоимость прямого реза за 1 погонный метр для всех исходных плит.
+                Стоимость прямого реза за 1 м.п.
               </p>
             </div>
           </div>
@@ -474,28 +1043,32 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
               <Sparkles className="w-3.5 h-3.5" />
               Стоимость услуг распила
             </div>
-            <div className="text-3xl font-black text-white">{formatCurrency(calculation.totalCutCostRub)}</div>
+            <div className="text-3xl font-black text-white">{formatCurrency(layoutResult.totalCutCostRub)}</div>
           </div>
 
           <div className="space-y-2 text-xs border-t border-slate-800 pt-3">
             <div className="flex justify-between items-center text-slate-300">
-              <span>Итого листов в расчёте:</span>
-              <strong className="text-rose-400 font-extrabold text-sm">{calculation.totalSheetsUsed} шт.</strong>
+              <span>Листов в расчёте:</span>
+              <strong className="text-rose-400 font-extrabold text-sm">{layoutResult.totalSheetsUsed} шт.</strong>
+            </div>
+            <div className="flex justify-between items-center text-slate-300">
+              <span>Деталей размещено:</span>
+              <strong className="text-white font-bold">{layoutResult.totalPiecesPlaced} из {layoutResult.totalPiecesCount} шт.</strong>
             </div>
             <div className="flex justify-between items-center text-slate-300">
               <span>Общая площадь деталей:</span>
-              <strong className="text-white font-bold">{calculation.totalPieceAreaM2.toFixed(2)} м² ({calculation.totalPiecesCount} дет.)</strong>
+              <strong className="text-white font-bold">{layoutResult.totalPieceAreaM2.toFixed(2)} м²</strong>
             </div>
             <div className="flex justify-between items-center text-slate-300">
-              <span>Линейный метраж пропила:</span>
-              <strong className="text-white font-bold">{calculation.totalLinearCutMeters.toFixed(1)} м.п.</strong>
+              <span>Метраж реза:</span>
+              <strong className="text-white font-bold">{layoutResult.totalLinearCutMeters.toFixed(1)} м.п.</strong>
             </div>
 
-            {!calculation.isFullyCovered && (
+            {!layoutResult.isFullyCovered && (
               <div className="bg-amber-950/80 border border-amber-600/50 rounded-lg p-2.5 text-amber-200 text-[11px] flex items-start gap-2 mt-2">
                 <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong>Внимание:</strong> Не хватает запаса плит! Непокрыто {calculation.remainingUncoveredAreaM2.toFixed(2)} м². Добавьте исходные листы или снимите лимит количества.
+                  <strong>Внимание:</strong> {layoutResult.unplacedItems.length} дет. не поместились! Добавьте исходные листы или измените габариты.
                 </div>
               </div>
             )}
@@ -521,7 +1094,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
               <span>Исходные листы (Форматы и Запас плит)</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Вы можете задать несколько форматов. Если количество не заполнено — считаем автоматический расход.
+              Вы можете настроить несколько форматов листов и указать торцевание по периметру.
             </p>
           </div>
           <button
@@ -542,15 +1115,12 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                 <th className="py-3 px-3 text-center">Длина (мм)</th>
                 <th className="py-3 px-3 text-center">Ширина (мм)</th>
                 <th className="py-3 px-3 text-center">Торцевание (мм)</th>
-                <th className="py-3 px-3 text-center">Кол-во в наличии (шт)</th>
-                <th className="py-3 px-3 text-center">Полезный размер</th>
-                <th className="py-3 px-3 text-center font-bold text-rose-700">Расход</th>
+                <th className="py-3 px-3 text-center">В наличии (шт)</th>
                 <th className="py-3 px-3 text-center">Удалить</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {stockSheets.map((s, idx) => {
-                const alloc = calculation.sheetAllocations.find(a => a.id === s.id);
                 const isUnlimited = s.maxQty === null || s.maxQty === undefined || s.maxQty === 0;
 
                 return (
@@ -610,22 +1180,6 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                               : 'border-slate-300 bg-white text-slate-900'
                           }`}
                         />
-                        <span className="text-[10px] font-medium text-slate-400">
-                          {isUnlimited ? '∞ не ограничено' : `лимит: ${s.maxQty} шт.`}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="text-slate-800 font-bold">
-                        {alloc?.effectiveLengthMm} × {alloc?.effectiveWidthMm} мм
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        ({alloc?.effectiveAreaM2.toFixed(2)} м²/лист)
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 text-rose-800 px-2.5 py-1 rounded-lg font-black text-xs">
-                        {alloc?.usedQty || 0} шт.
                       </div>
                     </td>
                     <td className="py-3 px-3 text-center">
@@ -646,7 +1200,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
         </div>
       </div>
 
-      {/* Section 2: Cut Pieces List */}
+      {/* Section 2: Cut Pieces List with Rotation Checkbox */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
           <div>
@@ -655,7 +1209,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
               <span>Детали для раскроя ({pieces.length})</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Укажите габариты получаемых деталей и необходимое количество штук.
+              Укажите габариты деталей, количество и возможность разворота на 90°.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -678,16 +1232,29 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                 <th className="py-3 px-3 text-center">Ширина (мм)</th>
                 <th className="py-3 px-3 text-center">Длина (мм)</th>
                 <th className="py-3 px-3 text-center">Кол-во (шт)</th>
-                <th className="py-3 px-3 text-center">Общая площадь</th>
+                <th className="py-3 px-3 text-center bg-rose-50/70 text-rose-900">
+                  <span className="flex items-center justify-center gap-1" title="Разрешить разворот детали на 90 градусов при оптимизации раскроя">
+                    <RotateCw className="w-3.5 h-3.5 text-rose-600" />
+                    Поворот (90°)
+                  </span>
+                </th>
+                <th className="py-3 px-3 text-center">Площадь</th>
                 <th className="py-3 px-3 text-center">Действие</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pieces.map((p, idx) => {
                 const areaM2 = (p.widthMm * p.heightMm / 1000000) * p.qty;
+                const pColor = PIECE_COLORS[idx % PIECE_COLORS.length];
+
                 return (
                   <tr key={p.id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-2.5 px-3 font-bold text-slate-400">{idx + 1}</td>
+                    <td className="py-2.5 px-3 font-bold text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full shadow-xs shrink-0" style={{ backgroundColor: pColor }} />
+                        <span>#{idx + 1}</span>
+                      </div>
+                    </td>
                     <td className="py-2.5 px-3">
                       <input
                         type="text"
@@ -721,6 +1288,22 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                         className="w-20 text-center border border-slate-300 rounded-lg px-2 py-1.5 font-bold focus:ring-2 focus:ring-rose-500 outline-none"
                       />
                     </td>
+                    
+                    {/* Can Rotate Checkbox */}
+                    <td className="py-2.5 px-3 text-center bg-rose-50/30">
+                      <label className="inline-flex items-center justify-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={p.canRotate !== false}
+                          onChange={(e) => handleUpdatePiece(p.id, { canRotate: e.target.checked })}
+                          className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer"
+                        />
+                        <span className={`font-bold text-xs ${p.canRotate !== false ? 'text-emerald-700' : 'text-slate-400'}`}>
+                          {p.canRotate !== false ? 'Да' : 'Фикс'}
+                        </span>
+                      </label>
+                    </td>
+
                     <td className="py-2.5 px-3 text-center font-bold text-slate-800">
                       {areaM2.toFixed(2)} м²
                     </td>
@@ -738,7 +1321,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
 
               {pieces.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 text-sm">
+                  <td colSpan={8} className="py-8 text-center text-slate-400 text-sm">
                     Список деталей пуст. Нажмите «Добавить деталь», чтобы внести элементы для раскроя.
                   </td>
                 </tr>
@@ -748,12 +1331,110 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
         </div>
       </div>
 
+      {/* Section 3: Cutting Layout Map (Карта раскроя) */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Grid className="w-5 h-5 text-rose-600" />
+              <h2 className="text-base font-bold text-slate-900">
+                Карта раскроя (Схема размещения)
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500">
+              Графическое отображение деталей на исходных листах с габаритами и направлением.
+            </p>
+          </div>
+
+          {/* Sheet Selector Tabs */}
+          {layoutResult.sheetLayouts.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setActiveSheetTab('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                  activeSheetTab === 'all'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Все листы ({layoutResult.sheetLayouts.length})
+              </button>
+              {layoutResult.sheetLayouts.map((sheet) => (
+                <button
+                  key={sheet.id}
+                  type="button"
+                  onClick={() => setActiveSheetTab(sheet.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                    activeSheetTab === sheet.id
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Лист #{sheet.sheetNumber}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Cutting Maps List */}
+        {layoutResult.sheetLayouts.length === 0 ? (
+          <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-2">
+            <Info className="w-8 h-8 text-slate-400 mx-auto" />
+            <p className="text-sm font-bold text-slate-600">Нет данных для построения карты раскроя</p>
+            <p className="text-xs text-slate-400">Добавьте детали и исходные листы в таблицы выше.</p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {layoutResult.sheetLayouts
+              .filter(s => activeSheetTab === 'all' || activeSheetTab === s.id)
+              .map(sheet => (
+                <div key={sheet.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-4">
+                  {renderSheetCanvas(sheet)}
+                </div>
+              ))}
+
+            {/* Pieces Legend Footer */}
+            <div className="pt-4 border-t border-slate-100 space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Легенда деталей на карте раскроя:
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {pieces.map((p, idx) => {
+                  const pColor = PIECE_COLORS[idx % PIECE_COLORS.length];
+                  return (
+                    <div 
+                      key={p.id}
+                      className="inline-flex items-center gap-2 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-800"
+                    >
+                      <span className="w-3.5 h-3.5 rounded-md shadow-xs" style={{ backgroundColor: pColor }} />
+                      <span>#{idx + 1} {p.note} ({p.widthMm} × {p.heightMm} мм)</span>
+                      <span className="text-slate-400 text-[11px] font-bold">— {p.qty} шт.</span>
+                      {p.canRotate !== false ? (
+                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-bold">
+                          90° OK
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded font-bold">
+                          Фикс
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Save Action Bar Bottom */}
       <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 text-white flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-bold">Готовы сохранить результат раскроя?</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Сохранённые расчёты доступны в списке для загрузки, корректировки и печати в любой момент.
+            Сохранённые расчёты и карты раскроя можно повторно загружать в любой момент.
           </p>
         </div>
         <button
@@ -818,15 +1499,21 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1">
                 <div className="flex justify-between font-semibold text-slate-800">
                   <span>Исходных форматов:</span>
-                  <span>{stockSheets.length} видов ({calculation.totalSheetsUsed} шт.)</span>
+                  <span>{stockSheets.length} видов ({layoutResult.totalSheetsUsed} шт.)</span>
                 </div>
                 <div className="flex justify-between font-semibold text-slate-800">
-                  <span>Количество деталей:</span>
-                  <span>{calculation.totalPiecesCount} шт.</span>
+                  <span>Тип раскроя:</span>
+                  <span className="text-amber-700 font-bold">
+                    {strategy === 'length' ? 'По длине' : strategy === 'width' ? 'По ширине' : 'Оптимально'}
+                  </span>
+                </div>
+                <div className="flex justify-between font-semibold text-slate-800">
+                  <span>Размещено деталей:</span>
+                  <span>{layoutResult.totalPiecesPlaced} из {layoutResult.totalPiecesCount} шт.</span>
                 </div>
                 <div className="flex justify-between font-bold text-rose-600 border-t border-slate-200 pt-1 mt-1">
                   <span>Итого тариф распила:</span>
-                  <span>{formatCurrency(calculation.totalCutCostRub)}</span>
+                  <span>{formatCurrency(layoutResult.totalCutCostRub)}</span>
                 </div>
               </div>
 
@@ -847,6 +1534,46 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Zoom Modal for Cutting Sheet Canvas */}
+      {zoomModalSheet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-slate-900 text-white rounded-3xl max-w-5xl w-full p-6 shadow-2xl border border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="bg-rose-600 text-white font-black text-xs px-3 py-1 rounded-lg">
+                  Лист №{zoomModalSheet.sheetNumber}
+                </span>
+                <h3 className="text-base font-bold text-white">
+                  Карта раскроя: {zoomModalSheet.sheetName} ({zoomModalSheet.lengthMm} × {zoomModalSheet.widthMm} мм)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setZoomModalSheet(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {renderSheetCanvas(zoomModalSheet, true)}
+
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+              <div>
+                Полезный размер листа после торцевания: <strong className="text-white">{zoomModalSheet.effectiveLengthMm} × {zoomModalSheet.effectiveWidthMm} мм</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setZoomModalSheet(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-xl transition"
+              >
+                Закрыть окно
+              </button>
+            </div>
           </div>
         </div>
       )}
