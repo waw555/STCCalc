@@ -149,6 +149,25 @@ export const App: React.FC = () => {
     setDecors(prev => prev.filter(d => d.id !== id));
   };
 
+  const handleAddThickness = (thickness: number) => {
+    if (!thickness || thickness <= 0) return;
+    const newThick: PanelThickness = { id: Date.now(), thickness, isActive: true };
+    setThicknesses(prev => [...prev, newThick].sort((a, b) => a.thickness - b.thickness));
+  };
+
+  const handleDeleteThickness = (id: number) => {
+    setThicknesses(prev => prev.filter(t => t.id !== id));
+  };
+
+  const handleAddPanelSize = (size: Omit<PanelSize, 'id'>) => {
+    const newSize: PanelSize = { id: Date.now(), ...size };
+    setPanelSizes(prev => [...prev, newSize]);
+  };
+
+  const handleDeletePanelSize = (id: number) => {
+    setPanelSizes(prev => prev.filter(p => p.id !== id));
+  };
+
   const handleAddEmbossing = (emb: Omit<Embossing, 'id'>) => {
     setEmbossings(prev => [...prev, { id: Date.now(), ...emb }]);
   };
@@ -286,6 +305,12 @@ export const App: React.FC = () => {
             decors={decors}
             onAddDecor={handleAddDecor}
             onDeleteDecor={handleDeleteDecor}
+            panelSizes={panelSizes}
+            onAddPanelSize={handleAddPanelSize}
+            onDeletePanelSize={handleDeletePanelSize}
+            thicknesses={thicknesses}
+            onAddThickness={handleAddThickness}
+            onDeleteThickness={handleDeleteThickness}
             embossings={embossings}
             onAddEmbossing={handleAddEmbossing}
             onUpdateEmbossing={handleUpdateEmbossing}

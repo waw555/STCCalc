@@ -1309,7 +1309,6 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({
             <thead className="bg-slate-100 text-slate-900 font-bold uppercase text-[11px] border-b border-slate-200">
               <tr>
                 <th className="py-3 px-3">№</th>
-                <th className="py-3 px-3">Источник (Из базы / Ручной)</th>
                 <th className="py-3 px-3">Наименование / Формат</th>
                 <th className="py-3 px-3 text-center">Длина (мм)</th>
                 <th className="py-3 px-3 text-center">Ширина (мм)</th>
@@ -1321,58 +1320,10 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({
             <tbody className="divide-y divide-slate-100">
               {stockSheets.map((s, idx) => {
                 const isUnlimited = s.maxQty === null || s.maxQty === undefined || s.maxQty === 0;
-                const isDbSource = s.sourceType === 'database';
 
                 return (
                   <tr key={s.id} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3 font-bold text-slate-400">{idx + 1}</td>
-                    
-                    {/* Source Selector Dropdown */}
-                    <td className="py-3 px-3 min-w-[200px]">
-                      <div className="space-y-1">
-                        <select
-                          value={s.sourceType === 'database' ? (s.dbPresetId || 'database') : 'manual'}
-                          onChange={(e) => handleSelectPresetForSheet(s.id, e.target.value)}
-                          className={`w-full text-xs font-semibold rounded-lg px-2 py-1.5 border outline-none focus:ring-2 focus:ring-rose-500 ${
-                            isDbSource 
-                              ? 'border-indigo-300 bg-indigo-50/70 text-indigo-900' 
-                              : 'border-slate-300 bg-white text-slate-700'
-                          }`}
-                        >
-                          <option value="manual">✍️ Ручной ввод (Свой размер)</option>
-                          
-                          <optgroup label="📁 Справочник форматов плит">
-                            {allDbSheets.filter(p => p.category === 'format').map(preset => (
-                              <option key={preset.id} value={preset.id}>
-                                📁 {preset.name} ({preset.lengthMm}×{preset.widthMm})
-                              </option>
-                            ))}
-                          </optgroup>
-
-                          <optgroup label="🎨 Декоры плит из каталога">
-                            {allDbSheets.filter(p => p.category === 'decor').map(preset => (
-                              <option key={preset.id} value={preset.id}>
-                                🎨 {preset.name} ({preset.lengthMm}×{preset.widthMm})
-                              </option>
-                            ))}
-                          </optgroup>
-                        </select>
-
-                        <div className="flex items-center gap-1.5">
-                          {isDbSource ? (
-                            <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
-                              <Database className="w-3 h-3 text-indigo-600" />
-                              Из базы плит
-                            </span>
-                          ) : (
-                            <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
-                              <FileText className="w-3 h-3 text-slate-500" />
-                              Ручной ввод
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
 
                     {/* Name Input */}
                     <td className="py-3 px-3 min-w-[180px]">

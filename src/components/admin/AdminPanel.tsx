@@ -12,7 +12,7 @@ import {
   UserSession,
   UserAccount 
 } from '../../types';
-import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil, Users, UserPlus, ShieldCheck, UserCheck, Lock, Mail, User as UserIcon, Search, Key, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil, Users, UserPlus, ShieldCheck, UserCheck, Lock, Mail, User as UserIcon, Search, Key, Eye, EyeOff, RefreshCw, Maximize2, Palette, Ruler, Database } from 'lucide-react';
 import { fetchCbrRates, CbrValute, POPULAR_CBR_CURRENCIES } from '../../services/cbrRates';
 import { 
   generateDecorFilePath, 
@@ -38,6 +38,12 @@ interface AdminPanelProps {
   decors: PanelFormat[];
   onAddDecor: (decor: Omit<PanelFormat, 'id'>) => void;
   onDeleteDecor: (id: number) => void;
+  panelSizes?: PanelSize[];
+  onAddPanelSize?: (size: Omit<PanelSize, 'id'>) => void;
+  onDeletePanelSize?: (id: number) => void;
+  thicknesses?: PanelThickness[];
+  onAddThickness?: (thickness: number) => void;
+  onDeleteThickness?: (id: number) => void;
   embossings: Embossing[];
   onAddEmbossing: (emb: Omit<Embossing, 'id'>) => void;
   onUpdateEmbossing?: (emb: Embossing) => void;
@@ -69,6 +75,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   decors,
   onAddDecor,
   onDeleteDecor,
+  panelSizes = [],
+  onAddPanelSize,
+  onDeletePanelSize,
+  thicknesses = [],
+  onAddThickness,
+  onDeleteThickness,
   embossings,
   onAddEmbossing,
   onUpdateEmbossing,
@@ -84,7 +96,87 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onUpdateUser,
   onDeleteUser,
 }) => {
-  const [adminTab, setAdminTab] = useState<'currencies' | 'mfg' | 'decors' | 'embossings' | 'services' | 'users' | 'org'>('currencies');
+  const [adminTab, setAdminTab] = useState<'panels' | 'decors' | 'formats' | 'thicknesses' | 'embossings' | 'mfg' | 'currencies' | 'services' | 'users' | 'org'>('panels');
+
+  // Panels (Finished Ready Panel) form state
+  const [panelMfgId, setPanelMfgId] = useState<number>(manufacturers[0]?.id || 1);
+  const [panelSizeId, setPanelSizeId] = useState<number>(panelSizes[0]?.id || 1);
+  const [panelDecorNumber, setPanelDecorNumber] = useState('');
+  const [panelDecorName, setPanelDecorName] = useState('');
+  const [panelEmbossingId, setPanelEmbossingId] = useState<number>(embossings[0]?.id || 1);
+  const [panelThicknessId, setPanelThicknessId] = useState<number>(thicknesses[0]?.id || 1);
+  const [panelPricePerM2, setPanelPricePerM2] = useState<number>(85.0);
+  const [panelCurrency, setPanelCurrency] = useState<string>('EUR');
+  const [panelIsStock, setPanelIsStock] = useState<boolean>(true);
+  const [panelSearch, setPanelSearch] = useState('');
+
+  // Thickness form state
+  const [newThicknessMm, setNewThicknessMm] = useState<number>(12);
+
+  const handleAddThicknessSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newThicknessMm || newThicknessMm <= 0) return;
+    if (onAddThickness) {
+      onAddThickness(newThicknessMm);
+    }
+  };
+
+  const handleAddPanelSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!panelDecorName.trim()) return;
+    const selSize = panelSizes.find(ps => ps.id === panelSizeId) || { heightMm: 3050, widthMm: 1300 };
+    const selThickness = thicknesses.find(t => t.id === panelThicknessId)?.thickness || 12;
+    const areaM2 = (selSize.heightMm * selSize.widthMm) / 1000000;
+    const priceSheet = Number((areaM2 * panelPricePerM2).toFixed(2));
+    const mfg = manufacturers.find(m => m.id === panelMfgId);
+
+    onAddDecor({
+      name: `${mfg?.fullName || ''} ${panelDecorNumber} ${panelDecorName}`.trim(),
+      decorNumber: panelDecorNumber.trim(),
+      decorName: panelDecorName.trim(),
+      widthMm: selSize.widthMm,
+      heightMm: selSize.heightMm,
+      thicknessMm: selThickness,
+      manufacturerId: panelMfgId,
+      embossingId: panelEmbossingId,
+      panelSizeId: panelSizeId,
+      thicknessId: panelThicknessId,
+      pricePerM2: panelPricePerM2,
+      pricePerSheet: priceSheet,
+      cost: Number((panelPricePerM2 / 1.465).toFixed(2)),
+      costPerSheet: Number((priceSheet / 1.465).toFixed(2)),
+      markup: 46.5,
+      currency: panelCurrency,
+      isStockDecor: panelIsStock,
+      isStockProgram: panelIsStock,
+      isActive: true,
+    });
+
+    setPanelDecorNumber('');
+    setPanelDecorName('');
+  };
+
+  // Format (Panel Size) form state
+  const [newFormatMfgId, setNewFormatMfgId] = useState<number>(manufacturers[0]?.id || 1);
+  const [newFormatHeightMm, setNewFormatHeightMm] = useState<number>(3050);
+  const [newFormatWidthMm, setNewFormatWidthMm] = useState<number>(1300);
+  const [newFormatIsStock, setNewFormatIsStock] = useState<boolean>(true);
+
+  const handleAddFormatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFormatHeightMm || !newFormatWidthMm) return;
+    const vol = Number(((newFormatHeightMm * newFormatWidthMm) / 1000000).toFixed(3));
+    if (onAddPanelSize) {
+      onAddPanelSize({
+        heightMm: newFormatHeightMm,
+        widthMm: newFormatWidthMm,
+        volumeM2: vol,
+        manufacturerId: newFormatMfgId,
+        isActive: true,
+        isStockProgram: newFormatIsStock,
+      });
+    }
+  };
 
   // CBR currencies state for adding
   const [cbrValutes, setCbrValutes] = useState<CbrValute[]>(POPULAR_CBR_CURRENCIES);
@@ -526,72 +618,186 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       </div>
 
-      {/* Admin Tabs */}
-      <div className="flex space-x-2 border-b border-slate-200 overflow-x-auto pb-2">
-        <button
-          onClick={() => setAdminTab('currencies')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            adminTab === 'currencies' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <DollarSign className="w-4 h-4" /> Валюты и курсы
-        </button>
-        <button
-          onClick={() => setAdminTab('mfg')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            adminTab === 'mfg' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <Building2 className="w-4 h-4" /> Производители
-        </button>
-        <button
-          onClick={() => setAdminTab('decors')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            adminTab === 'decors' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <Grid className="w-4 h-4" /> Декоры и форматы
-        </button>
-        <button
-          onClick={() => setAdminTab('embossings')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            adminTab === 'embossings' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <Layers className="w-4 h-4" /> Тиснения
-        </button>
-        <button
-          onClick={() => setAdminTab('services')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            adminTab === 'services' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <Sliders className="w-4 h-4" /> Тарифы услуг
-        </button>
-        <button
-          onClick={() => setAdminTab('users')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            adminTab === 'users' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <Users className="w-4 h-4" /> Пользователи
-          {users.length > 0 && (
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-              adminTab === 'users' ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'
-            }`}>
-              {users.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setAdminTab('org')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            adminTab === 'org' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <Settings className="w-4 h-4" /> Реквизиты компании
-        </button>
-      </div>
+      {/* Admin Primary Tabs */}
+      {(() => {
+        const isDbTab = ['panels', 'decors', 'formats', 'thicknesses', 'embossings', 'mfg'].includes(adminTab);
+
+        return (
+          <div className="space-y-3">
+            <div className="flex space-x-2 border-b border-slate-200 overflow-x-auto pb-2">
+              <button
+                onClick={() => {
+                  if (!isDbTab) setAdminTab('panels');
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap border ${
+                  isDbTab 
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-md' 
+                    : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <Database className="w-4 h-4" /> 
+                <span>База данных панелей</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  isDbTab ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {decors.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setAdminTab('currencies')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap border ${
+                  adminTab === 'currencies' 
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" /> Валюты и курсы
+              </button>
+
+              <button
+                onClick={() => setAdminTab('services')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap border ${
+                  adminTab === 'services' 
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Sliders className="w-4 h-4" /> Тарифы услуг
+              </button>
+
+              <button
+                onClick={() => setAdminTab('users')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap border ${
+                  adminTab === 'users' 
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Users className="w-4 h-4" /> Пользователи
+                {users.length > 0 && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                    adminTab === 'users' ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {users.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setAdminTab('org')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap border ${
+                  adminTab === 'org' 
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Settings className="w-4 h-4" /> Реквизиты компании
+              </button>
+            </div>
+
+            {/* Sub-Navigation for Panel Database */}
+            {isDbTab && (
+              <div className="bg-slate-900 text-white rounded-2xl p-3.5 shadow-md border border-slate-800 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-2 gap-1">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs font-extrabold tracking-wide uppercase text-blue-200">
+                      Раздел «База данных панелей»
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    Управление элементами и параметрами HPL панелей
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  <button
+                    onClick={() => setAdminTab('panels')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                      adminTab === 'panels' 
+                        ? 'bg-blue-600 text-white shadow' 
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" /> Панели
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-200 font-bold">
+                      {decors.length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('decors')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                      adminTab === 'decors' 
+                        ? 'bg-blue-600 text-white shadow' 
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Palette className="w-3.5 h-3.5" /> Декоры
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('formats')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                      adminTab === 'formats' 
+                        ? 'bg-blue-600 text-white shadow' 
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" /> Форматы
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-200 font-bold">
+                      {panelSizes.length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('thicknesses')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                      adminTab === 'thicknesses' 
+                        ? 'bg-blue-600 text-white shadow' 
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Ruler className="w-3.5 h-3.5" /> Толщины
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-200 font-bold">
+                      {thicknesses.length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('embossings')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                      adminTab === 'embossings' 
+                        ? 'bg-blue-600 text-white shadow' 
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Grid className="w-3.5 h-3.5" /> Тиснения
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-200 font-bold">
+                      {embossings.length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('mfg')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                      adminTab === 'mfg' 
+                        ? 'bg-blue-600 text-white shadow' 
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Building2 className="w-3.5 h-3.5" /> Производители
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-200 font-bold">
+                      {manufacturers.length}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Currencies Tab */}
       {adminTab === 'currencies' && (
@@ -929,6 +1135,276 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
+      {/* Panels (Finished Ready Panels) Tab */}
+      {adminTab === 'panels' && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
+          <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-600" />
+                <span>База готовых панелей HPL</span>
+              </h2>
+              <p className="text-xs text-slate-500">
+                Справочник готовых плит с указанием производителя, формата, декора, тиснения, толщины и цен за м² / за лист
+              </p>
+            </div>
+            <div className="relative min-w-[240px]">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                value={panelSearch}
+                onChange={(e) => setPanelSearch(e.target.value)}
+                placeholder="Поиск по декору, артикулу..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Form to create/add a new Panel */}
+          <form onSubmit={handleAddPanelSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-blue-600" /> Добавление новой готовой панели
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Manufacturer */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
+                <select
+                  value={panelMfgId}
+                  onChange={(e) => setPanelMfgId(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {manufacturers.map(m => (
+                    <option key={m.id} value={m.id}>{m.fullName} ({m.countryOrigin})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Format */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Формат листа (Д×Ш мм)</label>
+                <select
+                  value={panelSizeId}
+                  onChange={(e) => setPanelSizeId(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {panelSizes.map(ps => {
+                    const area = ps.volumeM2 || Number(((ps.heightMm * ps.widthMm) / 1000000).toFixed(3));
+                    return (
+                      <option key={ps.id} value={ps.id}>
+                        {ps.heightMm} × {ps.widthMm} мм ({area} м²)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Decor Number */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Артикул / Код декора</label>
+                <input
+                  type="text"
+                  value={panelDecorNumber}
+                  onChange={(e) => setPanelDecorNumber(e.target.value)}
+                  placeholder="Например: 3096"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Decor Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Наименование декора</label>
+                <input
+                  type="text"
+                  value={panelDecorName}
+                  onChange={(e) => setPanelDecorName(e.target.value)}
+                  placeholder="Например: Canyon Wood"
+                  required
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Embossing */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Тиснение</label>
+                <select
+                  value={panelEmbossingId}
+                  onChange={(e) => setPanelEmbossingId(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {embossings.map(emb => (
+                    <option key={emb.id} value={emb.id}>
+                      {emb.name} ({emb.shortName || '—'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Thickness */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Толщина (мм)</label>
+                <select
+                  value={panelThicknessId}
+                  onChange={(e) => setPanelThicknessId(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {thicknesses.map(t => (
+                    <option key={t.id} value={t.id}>{t.thickness} мм</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Price per M2 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Цена за м² ({panelCurrency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={panelPricePerM2}
+                  onChange={(e) => setPanelPricePerM2(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Currency */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Валюта цены</label>
+                <select
+                  value={panelCurrency}
+                  onChange={(e) => setPanelCurrency(e.target.value)}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {currencies.map(c => (
+                    <option key={c.code} value={c.code}>{c.code} ({c.name})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200 text-xs">
+              <div className="flex items-center gap-4 text-slate-700">
+                <span>
+                  Расчетная цена за лист: <strong className="text-emerald-700 text-sm">
+                    {(() => {
+                      const s = panelSizes.find(ps => ps.id === panelSizeId) || { heightMm: 3050, widthMm: 1300 };
+                      const area = (s.heightMm * s.widthMm) / 1000000;
+                      return (area * panelPricePerM2).toFixed(2);
+                    })()} {panelCurrency}
+                  </strong>
+                </span>
+                <label className="flex items-center gap-1.5 cursor-pointer font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={panelIsStock}
+                    onChange={(e) => setPanelIsStock(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  Складская программа
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-5 rounded-lg shadow transition flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" /> Добавить панель в базу
+              </button>
+            </div>
+          </form>
+
+          {/* List of Ready Panels */}
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-3">№</th>
+                  <th className="py-3 px-3">Производитель</th>
+                  <th className="py-3 px-3">Декор / Артикул</th>
+                  <th className="py-3 px-3">Формат (Д×Ш мм)</th>
+                  <th className="py-3 px-3">Тиснение</th>
+                  <th className="py-3 px-3">Толщина</th>
+                  <th className="py-3 px-3 text-right">Цена / м²</th>
+                  <th className="py-3 px-3 text-right">Цена / лист</th>
+                  <th className="py-3 px-3 text-center">Статус</th>
+                  <th className="py-3 px-3 text-center">Действия</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {decors
+                  .filter(d => {
+                    if (!panelSearch.trim()) return true;
+                    const q = panelSearch.toLowerCase();
+                    return (
+                      d.name?.toLowerCase().includes(q) ||
+                      d.decorNumber?.toLowerCase().includes(q) ||
+                      d.decorName?.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((panel, idx) => {
+                    const mfg = manufacturers.find(m => m.id === panel.manufacturerId);
+                    const emb = embossings.find(e => e.id === panel.embossingId);
+                    const area = Number(((panel.heightMm * panel.widthMm) / 1000000).toFixed(3));
+                    const priceM2 = panel.pricePerM2 || 0;
+                    const priceSheet = panel.pricePerSheet || Number((area * priceM2).toFixed(2));
+
+                    return (
+                      <tr key={panel.id} className="hover:bg-slate-50 transition">
+                        <td className="py-2.5 px-3 font-semibold text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                          {mfg ? mfg.fullName : '—'}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-bold text-slate-900">{panel.decorName || panel.name}</div>
+                          {panel.decorNumber && (
+                            <div className="text-[10px] text-slate-500 font-mono">Арт: {panel.decorNumber}</div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-medium text-slate-700">
+                          {panel.heightMm} × {panel.widthMm} мм ({area} м²)
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-700">
+                          {emb ? `${emb.name} (${emb.shortName})` : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                          {panel.thicknessMm || 12} мм
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                          {priceM2} {panel.currency}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                          {priceSheet} {panel.currency}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          {panel.isStockProgram ? (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">
+                              Склад
+                            </span>
+                          ) : (
+                            <span className="bg-slate-100 text-slate-600 text-[10px] font-semibold px-2 py-0.5 rounded">
+                              Заказ
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => onDeleteDecor(panel.id)}
+                            title="Удалить панель"
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Decors Tab */}
       {adminTab === 'decors' && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
@@ -1028,6 +1504,204 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         {d.decorPhotoPath}
                       </div>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Formats Tab */}
+      {adminTab === 'formats' && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Maximize2 className="w-5 h-5 text-blue-600" />
+              <span>Форматы листов HPL</span>
+            </h2>
+            <p className="text-xs text-slate-500">Справочник габаритных форматов плит (длина × ширина, площадь в м²)</p>
+          </div>
+
+          {/* Add Format Form */}
+          <form onSubmit={handleAddFormatSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
+                <select
+                  value={newFormatMfgId}
+                  onChange={(e) => setNewFormatMfgId(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {manufacturers.map(m => (
+                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Длина листа (мм)</label>
+                <input
+                  type="number"
+                  value={newFormatHeightMm}
+                  onChange={(e) => setNewFormatHeightMm(Number(e.target.value))}
+                  placeholder="3050"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Ширина листа (мм)</label>
+                <input
+                  type="number"
+                  value={newFormatWidthMm}
+                  onChange={(e) => setNewFormatWidthMm(Number(e.target.value))}
+                  placeholder="1300"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow transition flex items-center justify-center gap-1.5 min-h-[36px]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить формат</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-blue-50/80 border border-blue-200 rounded-lg p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-blue-900">
+              <span>Расчетная площадь листа: <strong>{((newFormatHeightMm * newFormatWidthMm) / 1000000).toFixed(3)} м²</strong> ({newFormatHeightMm} × {newFormatWidthMm} мм)</span>
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={newFormatIsStock}
+                  onChange={(e) => setNewFormatIsStock(e.target.checked)}
+                  className="rounded text-blue-600 focus:ring-blue-500"
+                />
+                Складская программа
+              </label>
+            </div>
+          </form>
+
+          {/* List of Formats */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Доступные форматы листов ({panelSizes.length})</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {panelSizes.map(ps => {
+                const mfg = manufacturers.find(m => m.id === ps.manufacturerId);
+                const area = ps.volumeM2 || Number(((ps.heightMm * ps.widthMm) / 1000000).toFixed(3));
+                return (
+                  <div key={ps.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-2 text-xs hover:border-slate-300 transition">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-bold text-slate-900 text-sm">
+                          {ps.heightMm} × {ps.widthMm} мм
+                        </div>
+                        <div className="text-slate-500 text-xs font-medium">
+                          {mfg ? mfg.fullName : 'Все производители'}
+                        </div>
+                      </div>
+                      {onDeletePanelSize && (
+                        <button
+                          type="button"
+                          onClick={() => onDeletePanelSize(ps.id)}
+                          title="Удалить формат"
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/70 text-[11px]">
+                      <span className="font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        Площадь: {area} м²
+                      </span>
+                      {ps.isStockProgram ? (
+                        <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">
+                          Складской
+                        </span>
+                      ) : (
+                        <span className="bg-slate-200 text-slate-600 font-semibold px-2 py-0.5 rounded text-[10px]">
+                          Под заказ
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Thicknesses Tab */}
+      {adminTab === 'thicknesses' && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Ruler className="w-5 h-5 text-blue-600" />
+              <span>Толщины компакт-плит HPL</span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Справочник допустимых толщин монолитного пластика HPL в миллиметрах
+            </p>
+          </div>
+
+          {/* Form to add thickness */}
+          <form onSubmit={handleAddThicknessSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-end gap-3 max-w-md">
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Толщина (мм)</label>
+              <input
+                type="number"
+                step="0.5"
+                value={newThicknessMm}
+                onChange={(e) => setNewThicknessMm(Number(e.target.value))}
+                placeholder="Например: 12"
+                required
+                min="0.5"
+                max="50"
+                className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              type="submit"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-4 rounded-lg shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap min-h-[36px]"
+            >
+              <Plus className="w-4 h-4" /> Добавить толщину
+            </button>
+          </form>
+
+          {/* List of Thicknesses */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Доступные толщины ({thicknesses.length})
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {thicknesses.map(t => {
+                const panelsCount = decors.filter(d => d.thicknessMm === t.thickness || d.thicknessId === t.id).length;
+                return (
+                  <div key={t.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-2 hover:border-slate-300 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-base font-extrabold text-slate-900">{t.thickness} мм</span>
+                      {onDeleteThickness && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteThickness(t.id)}
+                          title="Удалить толщину"
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium pt-1 border-t border-slate-200/60 flex items-center justify-between">
+                      <span>Панелей:</span>
+                      <span className="font-bold text-slate-700 bg-white px-1.5 py-0.2 rounded border border-slate-200">{panelsCount}</span>
+                    </div>
                   </div>
                 );
               })}
