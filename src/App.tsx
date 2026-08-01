@@ -296,6 +296,7 @@ export const App: React.FC = () => {
           <AdminPanel
             userSession={userSession}
             currencies={currencies}
+            selectedCurrency={selectedCurrency}
             onUpdateCurrencyRate={handleUpdateCurrencyRate}
             onAddCurrency={handleAddCurrency}
             onDeleteCurrency={handleDeleteCurrency}

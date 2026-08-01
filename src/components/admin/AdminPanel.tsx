@@ -58,6 +58,7 @@ interface AdminPanelProps {
   onAddUser?: (user: Omit<UserAccount, 'id' | 'createdAt'>) => void;
   onUpdateUser?: (user: UserAccount) => void;
   onDeleteUser?: (id: number) => void;
+  selectedCurrency?: string;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -95,6 +96,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onAddUser,
   onUpdateUser,
   onDeleteUser,
+  selectedCurrency = 'EUR',
 }) => {
   const [adminTab, setAdminTab] = useState<'panels' | 'decors' | 'formats' | 'thicknesses' | 'embossings' | 'mfg' | 'currencies' | 'services' | 'users' | 'org'>('panels');
 
@@ -106,9 +108,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [panelNomenclature1C, setPanelNomenclature1C] = useState('');
   const [panelEmbossingId, setPanelEmbossingId] = useState<number>(embossings[0]?.id || 1);
   const [panelThicknessId, setPanelThicknessId] = useState<number>(thicknesses[0]?.id || 1);
-  const [panelCurrency, setPanelCurrency] = useState<string>('EUR');
+  const [panelCurrency, setPanelCurrency] = useState<string>(selectedCurrency);
   const [panelIsStock, setPanelIsStock] = useState<boolean>(true);
   const [panelSearch, setPanelSearch] = useState('');
+
+  // Sync panelCurrency when selectedCurrency changes from header
+  useEffect(() => {
+    if (selectedCurrency) {
+      setPanelCurrency(selectedCurrency);
+    }
+  }, [selectedCurrency]);
 
   // Filters by Manufacturer for sub-tabs
   const [decorMfgFilter, setDecorMfgFilter] = useState<number | 'all'>('all');
