@@ -245,6 +245,9 @@ export const App: React.FC = () => {
           <CuttingCalculator
             currencies={currencies}
             selectedCurrency={selectedCurrency}
+            decors={decors}
+            panelSizes={panelSizes}
+            manufacturers={manufacturers}
           />
         )}
 

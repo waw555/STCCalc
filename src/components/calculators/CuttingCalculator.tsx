@@ -1,14 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Currency } from '../../types';
+import { Currency, PanelFormat, PanelSize, Manufacturer } from '../../types';
 import { 
   Scissors, Plus, Trash2, Layers, Settings, Sparkles, Info, Ruler, 
   CheckCircle2, AlertCircle, Save, FolderOpen, X, Check, FileText, Calendar, RefreshCw,
-  RotateCw, ArrowLeftRight, ArrowUpDown, Maximize2, Grid, Eye, ZoomIn, Compass, Shield
+  RotateCw, ArrowLeftRight, ArrowUpDown, Maximize2, Grid, Eye, ZoomIn, Compass, Shield,
+  Database, Search, Filter, BookOpen, ChevronDown
 } from 'lucide-react';
 
 interface CuttingCalculatorProps {
   currencies: Currency[];
   selectedCurrency: string;
+  decors?: PanelFormat[];
+  panelSizes?: PanelSize[];
+  manufacturers?: Manufacturer[];
 }
 
 export type CuttingStrategy = 'length' | 'width' | 'optimal';
@@ -20,6 +24,8 @@ export interface StockSheet {
   widthMm: number;
   trimmingMm: number; // Торцевание по периметру (мм)
   maxQty: number | null; // null or 0 = неограниченно
+  sourceType?: 'database' | 'manual';
+  dbPresetId?: string;
 }
 
 export interface Piece {
@@ -403,11 +409,97 @@ export function calculateCuttingLayout(
   };
 }
 
-export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies, selectedCurrency }) => {
+export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ 
+  currencies, 
+  selectedCurrency,
+  decors,
+  panelSizes,
+  manufacturers
+}) => {
   // Global Cutting Parameters
   const [kerfMm, setKerfMm] = useState<number>(4.0);
   const [cuttingPricePerMeterRub, setCuttingPricePerMeterRub] = useState<number>(250);
   const [strategy, setStrategy] = useState<CuttingStrategy>('optimal');
+
+  // Build unified database sheet presets catalog (from props panelSizes & decors + standard material presets)
+  const allDbSheets = useMemo(() => {
+    const list: Array<{
+      id: string;
+      name: string;
+      category: 'format' | 'decor';
+      lengthMm: number;
+      widthMm: number;
+      manufacturerName?: string;
+      decorNumber?: string;
+      pricePerSheet?: number;
+    }> = [];
+
+    // 1. Panel sizes from master database
+    if (panelSizes && panelSizes.length > 0) {
+      panelSizes.forEach(ps => {
+        const mfg = manufacturers?.find(m => m.id === ps.manufacturerId);
+        const mName = mfg ? mfg.fullName : 'HPL';
+        list.push({
+          id: `ps-${ps.id}`,
+          name: `Формат ${mName} ${ps.heightMm}×${ps.widthMm}`,
+          category: 'format',
+          lengthMm: ps.heightMm,
+          widthMm: ps.widthMm,
+          manufacturerName: mName,
+        });
+      });
+    } else {
+      list.push(
+        { id: 'ps-1', name: 'Формат Greenlam 3050×1300', category: 'format', lengthMm: 3050, widthMm: 1300, manufacturerName: 'Greenlam' },
+        { id: 'ps-2', name: 'Формат Greenlam XL 4100×1300', category: 'format', lengthMm: 4100, widthMm: 1300, manufacturerName: 'Greenlam' },
+        { id: 'ps-3', name: 'Формат Gentas 3050×1540', category: 'format', lengthMm: 3050, widthMm: 1540, manufacturerName: 'Gentas' },
+        { id: 'ps-4', name: 'Формат Fundermax 4100×1854', category: 'format', lengthMm: 4100, widthMm: 1854, manufacturerName: 'Fundermax' }
+      );
+    }
+
+    // Additional standard warehouse material formats
+    const standardFormats = [
+      { id: 'std-egger', name: 'Формат ЛДСП Egger 2800×2070', category: 'format' as const, lengthMm: 2800, widthMm: 2070, manufacturerName: 'Egger' },
+      { id: 'std-mdf-1', name: 'Формат МДФ 2440×1220', category: 'format' as const, lengthMm: 2440, widthMm: 1220, manufacturerName: 'МДФ Стандарт' },
+      { id: 'std-mdf-2', name: 'Формат МДФ XL 2800×2070', category: 'format' as const, lengthMm: 2800, widthMm: 2070, manufacturerName: 'МДФ Премиум' },
+      { id: 'std-plywood-1', name: 'Фанера ФК 1525×1525', category: 'format' as const, lengthMm: 1525, widthMm: 1525, manufacturerName: 'Фанера' },
+      { id: 'std-plywood-2', name: 'Фанера ФСФ 2440×1220', category: 'format' as const, lengthMm: 2440, widthMm: 1220, manufacturerName: 'Фанера XL' },
+      { id: 'std-abet', name: 'Формат Abet Laminati 3050×1300', category: 'format' as const, lengthMm: 3050, widthMm: 1300, manufacturerName: 'Abet Laminati' },
+    ];
+
+    standardFormats.forEach(std => {
+      if (!list.some(item => item.lengthMm === std.lengthMm && item.widthMm === std.widthMm && item.name === std.name)) {
+        list.push(std);
+      }
+    });
+
+    // 2. Decors from catalog
+    if (decors && decors.length > 0) {
+      decors.forEach(d => {
+        const mfg = manufacturers?.find(m => m.id === d.manufacturerId);
+        const mName = mfg ? mfg.fullName : 'HPL';
+        const dTitle = d.name || `Декор ${d.decorNumber || ''} ${d.decorName || ''}`.trim();
+        list.push({
+          id: `dec-${d.id}`,
+          name: dTitle.includes('(') ? dTitle : `${dTitle} (${d.heightMm || 3050}×${d.widthMm || 1300})`,
+          category: 'decor',
+          lengthMm: d.heightMm || 3050,
+          widthMm: d.widthMm || 1300,
+          manufacturerName: mName,
+          decorNumber: d.decorNumber,
+          pricePerSheet: d.pricePerSheet,
+        });
+      });
+    } else {
+      list.push(
+        { id: 'dec-1', name: 'Gentas 3096 Canyon Wood (3050×1300)', category: 'decor', lengthMm: 3050, widthMm: 1300, manufacturerName: 'Gentas', decorNumber: '3096' },
+        { id: 'dec-2', name: 'Greenlam 108 Sud Wood (3050×1300)', category: 'decor', lengthMm: 3050, widthMm: 1300, manufacturerName: 'Greenlam', decorNumber: '108' },
+        { id: 'dec-3', name: 'Abet Laminati 478 Microline (3050×1300)', category: 'decor', lengthMm: 3050, widthMm: 1300, manufacturerName: 'Abet Laminati', decorNumber: '478' }
+      );
+    }
+
+    return list;
+  }, [panelSizes, decors, manufacturers]);
 
   // Stock Sheets List
   const [stockSheets, setStockSheets] = useState<StockSheet[]>([
@@ -418,6 +510,8 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
       widthMm: 1300,
       trimmingMm: 10,
       maxQty: null, // Неограниченное количество
+      sourceType: 'database',
+      dbPresetId: 'ps-1',
     },
     {
       id: 'stock-2',
@@ -426,6 +520,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
       widthMm: 1300,
       trimmingMm: 0,
       maxQty: 2, // Ограничено 2 листами
+      sourceType: 'manual',
     },
   ]);
 
@@ -435,6 +530,11 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
     { id: 'p2', note: 'Боковины шкафа', widthMm: 450, heightMm: 800, qty: 6, canRotate: true },
     { id: 'p3', note: 'Полки', widthMm: 350, heightMm: 600, qty: 8, canRotate: false },
   ]);
+
+  // Catalog picker modal state
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogFilterCategory, setCatalogFilterCategory] = useState<'all' | 'format' | 'decor'>('all');
 
   // Saved calculations state
   const [savedCalcs, setSavedCalcs] = useState<SavedCuttingCalculation[]>(() => {
@@ -481,26 +581,102 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
   };
 
   // Stock sheet management
-  const handleAddStockSheet = () => {
+  const handleAddStockSheetManual = () => {
     const newSheet: StockSheet = {
       id: `stock-${Date.now()}`,
-      name: `Исходный лист ${stockSheets.length + 1}`,
+      name: `Произвольный лист ${stockSheets.length + 1}`,
       lengthMm: 3050,
       widthMm: 1300,
       trimmingMm: 10,
       maxQty: null,
+      sourceType: 'manual',
     };
     setStockSheets(prev => [...prev, newSheet]);
+    showToast('Добавлен лист с ручным вводом размеров');
+  };
+
+  const handleAddStockSheetFromDb = (presetId: string) => {
+    const preset = allDbSheets.find(p => p.id === presetId);
+    if (!preset) return;
+
+    const newSheet: StockSheet = {
+      id: `stock-${Date.now()}`,
+      name: preset.name,
+      lengthMm: preset.lengthMm,
+      widthMm: preset.widthMm,
+      trimmingMm: 10,
+      maxQty: null,
+      sourceType: 'database',
+      dbPresetId: preset.id,
+    };
+
+    setStockSheets(prev => [...prev, newSheet]);
+    setIsCatalogModalOpen(false);
+    showToast(`Лист «${preset.name}» добавлен из базы плит!`);
+  };
+
+  const handleSelectPresetForSheet = (sheetId: string, value: string) => {
+    if (value === 'manual') {
+      setStockSheets(prev => prev.map(s => s.id === sheetId ? {
+        ...s,
+        sourceType: 'manual',
+        dbPresetId: undefined
+      } : s));
+      return;
+    }
+
+    const preset = allDbSheets.find(p => p.id === value);
+    if (!preset) return;
+
+    setStockSheets(prev => prev.map(s => s.id === sheetId ? {
+      ...s,
+      name: preset.name,
+      lengthMm: preset.lengthMm,
+      widthMm: preset.widthMm,
+      sourceType: 'database',
+      dbPresetId: preset.id,
+    } : s));
+
+    showToast(`Выбран формат из базы: «${preset.name}»`);
   };
 
   const handleUpdateStockSheet = (id: string, fields: Partial<StockSheet>) => {
-    setStockSheets(prev => prev.map(s => s.id === id ? { ...s, ...fields } : s));
+    setStockSheets(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      // If user edits length or width directly, mark as custom manual modification if needed
+      const updated = { ...s, ...fields };
+      if ('lengthMm' in fields || 'widthMm' in fields) {
+        // If dimensions changed from preset, mark as manual or kept name
+        if (s.sourceType === 'database' && s.dbPresetId) {
+          const preset = allDbSheets.find(p => p.id === s.dbPresetId);
+          if (preset && (preset.lengthMm !== updated.lengthMm || preset.widthMm !== updated.widthMm)) {
+            updated.sourceType = 'manual';
+          }
+        }
+      }
+      return updated;
+    }));
   };
 
   const handleDeleteStockSheet = (id: string) => {
     if (stockSheets.length <= 1) return;
     setStockSheets(prev => prev.filter(s => s.id !== id));
   };
+
+  // Filtered DB sheets for Catalog Modal
+  const filteredDbSheets = useMemo(() => {
+    return allDbSheets.filter(item => {
+      const matchCat = catalogFilterCategory === 'all' || item.category === catalogFilterCategory;
+      const q = catalogSearch.toLowerCase().trim();
+      const matchSearch = !q || 
+        item.name.toLowerCase().includes(q) || 
+        (item.manufacturerName && item.manufacturerName.toLowerCase().includes(q)) ||
+        (item.decorNumber && item.decorNumber.toLowerCase().includes(q)) ||
+        `${item.lengthMm}x${item.widthMm}`.includes(q) ||
+        `${item.lengthMm}х${item.widthMm}`.includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [allDbSheets, catalogFilterCategory, catalogSearch]);
 
   // Pieces management
   const handleAddPiece = () => {
@@ -586,7 +762,10 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
     setKerfMm(saved.kerfMm);
     setCuttingPricePerMeterRub(saved.cuttingPricePerMeterRub);
     if (saved.strategy) setStrategy(saved.strategy);
-    setStockSheets(saved.stockSheets);
+    setStockSheets(saved.stockSheets.map(s => ({
+      ...s,
+      sourceType: s.sourceType || 'manual'
+    })));
     setPieces(saved.pieces.map(p => ({ ...p, canRotate: p.canRotate !== false })));
     showToast(`Загружен раскрой: «${saved.title}»`);
   };
@@ -707,7 +886,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                   height: `${effPctY}%`,
                 }}
               >
-                {sheet.placedPieces.map((p, pIndex) => {
+                {sheet.placedPieces.map((p) => {
                   const leftPct = (p.xMm / sheet.effectiveLengthMm) * 100;
                   const topPct = (p.yMm / sheet.effectiveWidthMm) * 100;
                   const widthPct = (p.placedWidthMm / sheet.effectiveLengthMm) * 100;
@@ -792,19 +971,27 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-bold uppercase tracking-wider text-rose-400 bg-rose-950/80 border border-rose-800/80 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <Scissors className="w-3.5 h-3.5" />
-                Интерактивная карта раскроя плит
+                Интерактивный 2D раскрой плит
               </span>
-              <span className="text-xs text-slate-400">HPL, МДФ, Компакт-пластик</span>
+              <span className="text-xs text-slate-400">База плит / декоров & Ручные форматы</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               Калькулятор и карта раскроя
             </h1>
             <p className="text-sm text-slate-300 mt-1 max-w-2xl">
-              Визуализация расположения деталей на листах с контролем поворота 90°, 3 типами раскроя и учётом толщины пропила.
+              Выбор исходных листов из базы декоров/форматов или произвольный ручной ввод с поворотом на 90° и оптимизацией реза.
             </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={() => setIsCatalogModalOpen(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl shadow-lg transition"
+            >
+              <Database className="w-4 h-4 text-amber-300" />
+              <span>База плит / декоров</span>
+            </button>
+
             {savedCalcs.length > 0 && (
               <button
                 onClick={() => setShowSavedList(!showSavedList)}
@@ -1085,25 +1272,36 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
 
       </div>
 
-      {/* Section 1: Stock Sheets Inventory */}
+      {/* Section 1: Stock Sheets Inventory (With DB Catalog & Manual Input Options) */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 gap-3">
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Layers className="w-5 h-5 text-rose-600" />
               <span>Исходные листы (Форматы и Запас плит)</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Вы можете настроить несколько форматов листов и указать торцевание по периметру.
+              Выберите готовые плиты из базы декоров/форматов или введите размеры вручную.
             </p>
           </div>
-          <button
-            onClick={handleAddStockSheet}
-            className="flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs px-3.5 py-2 rounded-lg shadow transition shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Добавить исходный лист</span>
-          </button>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={() => setIsCatalogModalOpen(true)}
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow transition"
+            >
+              <Database className="w-4 h-4 text-amber-300" />
+              <span>Выбрать из базы</span>
+            </button>
+
+            <button
+              onClick={handleAddStockSheetManual}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs px-3.5 py-2 rounded-lg shadow transition"
+            >
+              <Plus className="w-4 h-4 text-slate-300" />
+              <span>Указать вручную</span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -1111,6 +1309,7 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
             <thead className="bg-slate-100 text-slate-900 font-bold uppercase text-[11px] border-b border-slate-200">
               <tr>
                 <th className="py-3 px-3">№</th>
+                <th className="py-3 px-3">Источник (Из базы / Ручной)</th>
                 <th className="py-3 px-3">Наименование / Формат</th>
                 <th className="py-3 px-3 text-center">Длина (мм)</th>
                 <th className="py-3 px-3 text-center">Ширина (мм)</th>
@@ -1122,11 +1321,61 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
             <tbody className="divide-y divide-slate-100">
               {stockSheets.map((s, idx) => {
                 const isUnlimited = s.maxQty === null || s.maxQty === undefined || s.maxQty === 0;
+                const isDbSource = s.sourceType === 'database';
 
                 return (
                   <tr key={s.id} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3 font-bold text-slate-400">{idx + 1}</td>
-                    <td className="py-3 px-3">
+                    
+                    {/* Source Selector Dropdown */}
+                    <td className="py-3 px-3 min-w-[200px]">
+                      <div className="space-y-1">
+                        <select
+                          value={s.sourceType === 'database' ? (s.dbPresetId || 'database') : 'manual'}
+                          onChange={(e) => handleSelectPresetForSheet(s.id, e.target.value)}
+                          className={`w-full text-xs font-semibold rounded-lg px-2 py-1.5 border outline-none focus:ring-2 focus:ring-rose-500 ${
+                            isDbSource 
+                              ? 'border-indigo-300 bg-indigo-50/70 text-indigo-900' 
+                              : 'border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <option value="manual">✍️ Ручной ввод (Свой размер)</option>
+                          
+                          <optgroup label="📁 Справочник форматов плит">
+                            {allDbSheets.filter(p => p.category === 'format').map(preset => (
+                              <option key={preset.id} value={preset.id}>
+                                📁 {preset.name} ({preset.lengthMm}×{preset.widthMm})
+                              </option>
+                            ))}
+                          </optgroup>
+
+                          <optgroup label="🎨 Декоры плит из каталога">
+                            {allDbSheets.filter(p => p.category === 'decor').map(preset => (
+                              <option key={preset.id} value={preset.id}>
+                                🎨 {preset.name} ({preset.lengthMm}×{preset.widthMm})
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+
+                        <div className="flex items-center gap-1.5">
+                          {isDbSource ? (
+                            <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <Database className="w-3 h-3 text-indigo-600" />
+                              Из базы плит
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <FileText className="w-3 h-3 text-slate-500" />
+                              Ручной ввод
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Name Input */}
+                    <td className="py-3 px-3 min-w-[180px]">
                       <input
                         type="text"
                         value={s.name}
@@ -1134,6 +1383,8 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                         className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold text-slate-900 focus:ring-2 focus:ring-rose-500 outline-none"
                       />
                     </td>
+
+                    {/* Length */}
                     <td className="py-3 px-3 text-center">
                       <input
                         type="number"
@@ -1142,6 +1393,8 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                         className="w-24 text-center border border-slate-300 rounded-lg px-2 py-1.5 font-semibold focus:ring-2 focus:ring-rose-500 outline-none"
                       />
                     </td>
+
+                    {/* Width */}
                     <td className="py-3 px-3 text-center">
                       <input
                         type="number"
@@ -1150,6 +1403,8 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                         className="w-24 text-center border border-slate-300 rounded-lg px-2 py-1.5 font-semibold focus:ring-2 focus:ring-rose-500 outline-none"
                       />
                     </td>
+
+                    {/* Trimming Margin */}
                     <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <input
@@ -1163,6 +1418,8 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                         <span className="text-[10px] text-slate-400">мм</span>
                       </div>
                     </td>
+
+                    {/* Max Qty */}
                     <td className="py-3 px-3 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <input
@@ -1182,6 +1439,8 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                         />
                       </div>
                     </td>
+
+                    {/* Delete */}
                     <td className="py-3 px-3 text-center">
                       <button
                         onClick={() => handleDeleteStockSheet(s.id)}
@@ -1249,68 +1508,71 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
 
                 return (
                   <tr key={p.id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-2.5 px-3 font-bold text-slate-400">
+                    <td className="py-3 px-3 font-bold text-slate-400">{idx + 1}</td>
+                    <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full shadow-xs shrink-0" style={{ backgroundColor: pColor }} />
-                        <span>#{idx + 1}</span>
+                        <div 
+                          className="w-3 h-3 rounded-full shrink-0 shadow-xs" 
+                          style={{ backgroundColor: pColor }} 
+                        />
+                        <input
+                          type="text"
+                          value={p.note}
+                          onChange={(e) => handleUpdatePiece(p.id, { note: e.target.value })}
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold text-slate-900 focus:ring-2 focus:ring-rose-500 outline-none"
+                        />
                       </div>
                     </td>
-                    <td className="py-2.5 px-3">
-                      <input
-                        type="text"
-                        value={p.note}
-                        onChange={(e) => handleUpdatePiece(p.id, { note: e.target.value })}
-                        className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold text-slate-900 focus:ring-2 focus:ring-rose-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-3 px-3 text-center">
                       <input
                         type="number"
                         value={p.widthMm}
-                        onChange={(e) => handleUpdatePiece(p.id, { widthMm: Math.max(1, Number(e.target.value)) })}
+                        onChange={(e) => handleUpdatePiece(p.id, { widthMm: Math.max(10, Number(e.target.value)) })}
                         className="w-24 text-center border border-slate-300 rounded-lg px-2 py-1.5 font-semibold focus:ring-2 focus:ring-rose-500 outline-none"
                       />
                     </td>
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-3 px-3 text-center">
                       <input
                         type="number"
                         value={p.heightMm}
-                        onChange={(e) => handleUpdatePiece(p.id, { heightMm: Math.max(1, Number(e.target.value)) })}
+                        onChange={(e) => handleUpdatePiece(p.id, { heightMm: Math.max(10, Number(e.target.value)) })}
                         className="w-24 text-center border border-slate-300 rounded-lg px-2 py-1.5 font-semibold focus:ring-2 focus:ring-rose-500 outline-none"
                       />
                     </td>
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-3 px-3 text-center">
                       <input
                         type="number"
                         min="1"
                         value={p.qty}
                         onChange={(e) => handleUpdatePiece(p.id, { qty: Math.max(1, Number(e.target.value)) })}
-                        className="w-20 text-center border border-slate-300 rounded-lg px-2 py-1.5 font-bold focus:ring-2 focus:ring-rose-500 outline-none"
+                        className="w-20 text-center border border-slate-300 rounded-lg px-2 py-1.5 font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 outline-none"
                       />
                     </td>
                     
                     {/* Can Rotate Checkbox */}
-                    <td className="py-2.5 px-3 text-center bg-rose-50/30">
-                      <label className="inline-flex items-center justify-center gap-1.5 cursor-pointer select-none">
+                    <td className="py-3 px-3 text-center bg-rose-50/40">
+                      <label className="inline-flex items-center justify-center cursor-pointer p-1">
                         <input
                           type="checkbox"
-                          checked={p.canRotate !== false}
+                          checked={p.canRotate}
                           onChange={(e) => handleUpdatePiece(p.id, { canRotate: e.target.checked })}
                           className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer"
                         />
-                        <span className={`font-bold text-xs ${p.canRotate !== false ? 'text-emerald-700' : 'text-slate-400'}`}>
-                          {p.canRotate !== false ? 'Да' : 'Фикс'}
+                        <span className="ml-1.5 text-[11px] font-bold text-slate-700 select-none">
+                          {p.canRotate ? 'Да' : 'Нет'}
                         </span>
                       </label>
                     </td>
 
-                    <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                    <td className="py-3 px-3 text-center font-semibold text-slate-600">
                       {areaM2.toFixed(2)} м²
                     </td>
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-3 px-3 text-center">
                       <button
                         onClick={() => handleDeletePiece(p.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        disabled={pieces.length <= 1}
+                        title="Удалить деталь"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-30"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1318,57 +1580,47 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
                   </tr>
                 );
               })}
-
-              {pieces.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400 text-sm">
-                    Список деталей пуст. Нажмите «Добавить деталь», чтобы внести элементы для раскроя.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Section 3: Cutting Layout Map (Карта раскроя) */}
+      {/* Section 3: Visual Cutting Maps Output */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <Grid className="w-5 h-5 text-rose-600" />
-              <h2 className="text-base font-bold text-slate-900">
-                Карта раскроя (Схема размещения)
-              </h2>
-            </div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Compass className="w-5 h-5 text-rose-600" />
+              <span>Карта раскроя плит ({layoutResult.sheetLayouts.length} листов)</span>
+            </h2>
             <p className="text-xs text-slate-500">
-              Графическое отображение деталей на исходных листах с габаритами и направлением.
+              Графическое расположение деталей на листах с учётом торцевания и резов пилы.
             </p>
           </div>
 
           {/* Sheet Selector Tabs */}
-          {layoutResult.sheetLayouts.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl overflow-x-auto">
+          {layoutResult.sheetLayouts.length > 1 && (
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
               <button
                 type="button"
                 onClick={() => setActiveSheetTab('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition shrink-0 ${
                   activeSheetTab === 'all'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-rose-600 text-white shadow'
+                    : 'text-slate-600 hover:bg-slate-200/60'
                 }`}
               >
                 Все листы ({layoutResult.sheetLayouts.length})
               </button>
-              {layoutResult.sheetLayouts.map((sheet) => (
+              {layoutResult.sheetLayouts.map(sheet => (
                 <button
                   key={sheet.id}
                   type="button"
                   onClick={() => setActiveSheetTab(sheet.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition shrink-0 ${
                     activeSheetTab === sheet.id
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-rose-600 text-white shadow'
+                      : 'text-slate-600 hover:bg-slate-200/60'
                   }`}
                 >
                   Лист #{sheet.sheetNumber}
@@ -1380,123 +1632,213 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({ currencies
 
         {/* Cutting Maps List */}
         {layoutResult.sheetLayouts.length === 0 ? (
-          <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-2">
-            <Info className="w-8 h-8 text-slate-400 mx-auto" />
-            <p className="text-sm font-bold text-slate-600">Нет данных для построения карты раскроя</p>
-            <p className="text-xs text-slate-400">Добавьте детали и исходные листы в таблицы выше.</p>
+          <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-500 space-y-2">
+            <AlertCircle className="w-8 h-8 mx-auto text-amber-500" />
+            <p className="font-bold text-sm">Невозможно построить карту раскроя</p>
+            <p className="text-xs">Проверьте габариты исходных листов и деталей.</p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {layoutResult.sheetLayouts
-              .filter(s => activeSheetTab === 'all' || activeSheetTab === s.id)
+              .filter(sheet => activeSheetTab === 'all' || activeSheetTab === sheet.id)
               .map(sheet => (
-                <div key={sheet.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-4">
+                <div key={sheet.id} className="space-y-2">
                   {renderSheetCanvas(sheet)}
                 </div>
               ))}
-
-            {/* Pieces Legend Footer */}
-            <div className="pt-4 border-t border-slate-100 space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Легенда деталей на карте раскроя:
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {pieces.map((p, idx) => {
-                  const pColor = PIECE_COLORS[idx % PIECE_COLORS.length];
-                  return (
-                    <div 
-                      key={p.id}
-                      className="inline-flex items-center gap-2 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-800"
-                    >
-                      <span className="w-3.5 h-3.5 rounded-md shadow-xs" style={{ backgroundColor: pColor }} />
-                      <span>#{idx + 1} {p.note} ({p.widthMm} × {p.heightMm} мм)</span>
-                      <span className="text-slate-400 text-[11px] font-bold">— {p.qty} шт.</span>
-                      {p.canRotate !== false ? (
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-bold">
-                          90° OK
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded font-bold">
-                          Фикс
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         )}
       </div>
 
-      {/* Save Action Bar Bottom */}
-      <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 text-white flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-bold">Готовы сохранить результат раскроя?</h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Сохранённые расчёты и карты раскроя можно повторно загружать в любой момент.
-          </p>
-        </div>
-        <button
-          onClick={handleOpenSaveModal}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg transition"
-        >
-          <Save className="w-4 h-4" />
-          <span>Сохранить раскрой</span>
-        </button>
-      </div>
-
-      {/* Save Modal */}
-      {isSaveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+      {/* Modal 1: Catalog Picker Modal ("База плит и декоров") */}
+      {isCatalogModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 max-h-[90vh] flex flex-col">
+            
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-rose-50 rounded-lg text-rose-600">
-                  <Save className="w-5 h-5" />
+                <div className="bg-indigo-100 p-2 rounded-xl text-indigo-700">
+                  <Database className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Сохранить раскрой</h3>
-                  <p className="text-xs text-slate-500">Укажите наименование для быстрого поиска</p>
+                  <h3 className="text-lg font-bold text-slate-900">База исходных плит и декоров</h3>
+                  <p className="text-xs text-slate-500">Выберите готовый формат или декор из каталога для добавления в раскрой</p>
                 </div>
               </div>
               <button
-                onClick={() => setIsSaveModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                type="button"
+                onClick={() => setIsCatalogModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCalculation} className="space-y-4">
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Поиск по названию, декору, габаритам..."
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  className="w-full text-xs font-semibold pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setCatalogFilterCategory('all')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex-1 sm:flex-none ${
+                    catalogFilterCategory === 'all'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Все ({allDbSheets.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogFilterCategory('format')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex-1 sm:flex-none ${
+                    catalogFilterCategory === 'format'
+                      ? 'bg-white text-indigo-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Форматы плит
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogFilterCategory('decor')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex-1 sm:flex-none ${
+                    catalogFilterCategory === 'decor'
+                      ? 'bg-white text-rose-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Декоры каталога
+                </button>
+              </div>
+            </div>
+
+            {/* Catalog Grid */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-[320px]">
+              {filteredDbSheets.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 space-y-2">
+                  <Info className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs font-semibold">По вашему запросу ничего не найдено.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {filteredDbSheets.map(item => (
+                    <div 
+                      key={item.id}
+                      className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-2xl p-4 transition flex flex-col justify-between space-y-3 group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            item.category === 'format'
+                              ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                              : 'bg-rose-100 text-rose-800 border border-rose-200'
+                          }`}>
+                            {item.category === 'format' ? 'Формат плиты' : 'Декор плит'}
+                          </span>
+                          {item.manufacturerName && (
+                            <span className="text-[10px] font-semibold text-slate-400">
+                              {item.manufacturerName}
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="text-xs font-bold text-slate-900 leading-snug group-hover:text-rose-600 transition">
+                          {item.name}
+                        </h4>
+
+                        <div className="mt-2 text-xs font-extrabold text-slate-700 bg-white border border-slate-200 px-2.5 py-1 rounded-lg inline-block">
+                          {item.lengthMm} × {item.widthMm} мм
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddStockSheetFromDb(item.id)}
+                        className="w-full flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2 rounded-xl shadow transition"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Добавить в раскрой</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 text-xs text-slate-500">
+              <span>Доступно в базе: <strong>{allDbSheets.length}</strong> видов листов</span>
+              <button
+                type="button"
+                onClick={() => setIsCatalogModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 rounded-xl transition"
+              >
+                Закрыть
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Save Calculation Modal */}
+      {isSaveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Save className="w-5 h-5 text-rose-600" />
+                <span>Сохранить карту раскроя</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSaveModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCalculation} className="space-y-4 text-xs">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Наименование раскроя / Номер заказа *
+                <label className="block text-slate-700 font-bold mb-1">
+                  Название раскроя *
                 </label>
                 <input
                   type="text"
                   required
                   value={saveTitle}
                   onChange={(e) => setSaveTitle(e.target.value)}
-                  placeholder="Например: Заказ №104 — Фасадные панели"
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-rose-500 outline-none text-slate-900"
+                  placeholder="Например: Фасады HPL для ЖК Парковый"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-rose-500 outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Заказчик / Клиент (необязательно)
+                <label className="block text-slate-700 font-bold mb-1">
+                  Имя заказчика / объекта (опционально)
                 </label>
                 <input
                   type="text"
                   value={saveClientName}
                   onChange={(e) => setSaveClientName(e.target.value)}
-                  placeholder="ООО СпецСтрой / Иванов И.И."
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-rose-500 outline-none text-slate-900"
+                  placeholder="Например: ООО ИнтерьерСтрой"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-rose-500 outline-none"
                 />
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1 text-[11px]">
                 <div className="flex justify-between font-semibold text-slate-800">
                   <span>Исходных форматов:</span>
                   <span>{stockSheets.length} видов ({layoutResult.totalSheetsUsed} шт.)</span>
