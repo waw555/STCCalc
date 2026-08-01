@@ -554,7 +554,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Org form state
   const [orgState, setOrgState] = useState<OrganizationSettings>(organization);
+  const [orgLogoPreview, setOrgLogoPreview] = useState<string>(organization.logoPath || '');
   const [orgSaveMessage, setOrgSaveMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOrgState(organization);
+    setOrgLogoPreview(organization.logoPath || '');
+  }, [organization]);
+
+  const handleOrgLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setOrgLogoPreview(result);
+        setOrgState(prev => ({ ...prev, logoPath: result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveOrgLogo = () => {
+    setOrgLogoPreview('');
+    setOrgState(prev => ({ ...prev, logoPath: '' }));
+  };
 
   // Users form state
   const [newUsername, setNewUsername] = useState('');
@@ -777,11 +801,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Org Submit
   const handleOrgSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const updatedLogoPath = generateOrganizationFilePath(orgState.fullName, 'png');
-    const updated = { ...orgState, logoPath: updatedLogoPath };
+    const finalLogo = orgLogoPreview || orgState.logoPath || '';
+    const updated = { ...orgState, logoPath: finalLogo };
     onUpdateOrganization(updated);
     setOrgState(updated);
-    setOrgSaveMessage('Реквизиты организации и путь к логотипу успешно сохранены!');
+    setOrgSaveMessage('Реквизиты организации и логотип успешно сохранены!');
     setTimeout(() => setOrgSaveMessage(null), 3000);
   };
 
@@ -2865,69 +2889,194 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       {/* Org Tab */}
       {adminTab === 'org' && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
-          <div className="border-b border-slate-100 pb-3">
-            <h2 className="text-lg font-bold text-slate-900">Реквизиты организации</h2>
-            <p className="text-xs text-slate-500">Логотип сохраняется в <code>/uploads/organization</code> с именем: <strong>Название организации</strong></p>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-5">
+          <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Реквизиты организации</h2>
+              <p className="text-xs text-slate-500">Управление информацией об организации, реквизитами и логотипом</p>
+            </div>
           </div>
           
           {orgSaveMessage && (
             <div className="bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs p-3 rounded-lg font-bold flex items-center gap-2">
-              <Check className="w-4 h-4" /> {orgSaveMessage}
+              <Check className="w-4 h-4 text-emerald-600" /> {orgSaveMessage}
             </div>
           )}
 
-          <form onSubmit={handleOrgSave} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Полное наименование</label>
-              <input
-                type="text"
-                value={orgState.fullName}
-                onChange={(e) => setOrgState({ ...orgState, fullName: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">ИНН</label>
-              <input
-                type="text"
-                value={orgState.inn}
-                onChange={(e) => setOrgState({ ...orgState, inn: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Телефон</label>
-              <input
-                type="text"
-                value={orgState.phone}
-                onChange={(e) => setOrgState({ ...orgState, phone: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Email</label>
-              <input
-                type="text"
-                value={orgState.email}
-                onChange={(e) => setOrgState({ ...orgState, email: e.target.value })}
-                className="w-full border border-slate-300 rounded px-3 py-2 font-medium bg-white"
-              />
-            </div>
+          <form onSubmit={handleOrgSave} className="space-y-6 text-xs">
+            {/* Logo Section with direct Image Preview and Upload button */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white flex items-center justify-center p-2 shadow-sm overflow-hidden flex-shrink-0">
+                  {(orgLogoPreview || orgState.logoPath) ? (
+                    <img
+                      src={orgLogoPreview || orgState.logoPath}
+                      alt="Логотип компании"
+                      className="max-h-full max-w-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-400">
+                      <Building2 className="w-8 h-8 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-400 text-center">Нет логотипа</span>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Логотип компании</h4>
+                  <p className="text-xs text-slate-500 mt-0.5 max-w-sm">
+                    Отображается в документах, КП и шапке отчетов. Загрузите изображение в формате PNG, JPG или WebP.
+                  </p>
+                </div>
+              </div>
 
-            {/* Generated Logo Path Banner */}
-            <div className="sm:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-amber-900 font-medium">
-                <ImageIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span>Сгенерированный путь файла логотипа:</span>
-                <code className="font-mono bg-white px-2 py-0.5 rounded border border-amber-300 font-bold text-amber-800">
-                  {generateOrganizationFilePath(orgState.fullName, 'png')}
-                </code>
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl border border-slate-300 shadow-sm transition flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-blue-600" />
+                  <span>Загрузить логотип</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleOrgLogoUpload}
+                    className="hidden"
+                  />
+                </label>
+                {(orgLogoPreview || orgState.logoPath) && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveOrgLogo}
+                    className="bg-white hover:bg-rose-50 text-rose-600 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-rose-200 shadow-sm transition flex items-center gap-1.5"
+                    title="Удалить логотип"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Удалить</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="sm:col-span-2">
-              <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-2">
+            {/* General Info */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Основная информация</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Полное наименование *</label>
+                  <input
+                    type="text"
+                    required
+                    value={orgState.fullName || ''}
+                    onChange={(e) => setOrgState({ ...orgState, fullName: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Краткое наименование</label>
+                  <input
+                    type="text"
+                    value={orgState.shortName || ''}
+                    onChange={(e) => setOrgState({ ...orgState, shortName: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Company Address Field */}
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Адрес компании</label>
+                  <input
+                    type="text"
+                    value={orgState.address || ''}
+                    onChange={(e) => setOrgState({ ...orgState, address: e.target.value })}
+                    placeholder="Например: г. Москва, шоссе Энтузиастов, д. 56, стр. 3"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Город</label>
+                  <input
+                    type="text"
+                    value={orgState.city || ''}
+                    onChange={(e) => setOrgState({ ...orgState, city: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Телефон</label>
+                  <input
+                    type="text"
+                    value={orgState.phone || ''}
+                    onChange={(e) => setOrgState({ ...orgState, phone: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Email</label>
+                  <input
+                    type="text"
+                    value={orgState.email || ''}
+                    onChange={(e) => setOrgState({ ...orgState, email: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Сайт</label>
+                  <input
+                    type="text"
+                    value={orgState.website || ''}
+                    onChange={(e) => setOrgState({ ...orgState, website: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Requisites */}
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Банковские и юридические реквизиты</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">ИНН</label>
+                  <input
+                    type="text"
+                    value={orgState.inn || ''}
+                    onChange={(e) => setOrgState({ ...orgState, inn: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">ОГРН</label>
+                  <input
+                    type="text"
+                    value={orgState.ogrn || ''}
+                    onChange={(e) => setOrgState({ ...orgState, ogrn: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">БИК</label>
+                  <input
+                    type="text"
+                    value={orgState.bik || ''}
+                    onChange={(e) => setOrgState({ ...orgState, bik: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Наименование банка</label>
+                  <input
+                    type="text"
+                    value={orgState.bankName || ''}
+                    onChange={(e) => setOrgState({ ...orgState, bankName: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow transition flex items-center gap-2">
                 <Save className="w-4 h-4" /> Сохранить изменения
               </button>
             </div>
