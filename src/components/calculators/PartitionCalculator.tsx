@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Currency, Service, Manufacturer } from '../../types';
 import { DoorOpen, Plus, Trash2, Save, Check, FileText } from 'lucide-react';
+import { subscribeToCalculatorData, saveCalculatorStateToFirestore } from '../../lib/firebase';
 
 interface PartitionCalculatorProps {
   manufacturers: Manufacturer[];
@@ -91,11 +92,25 @@ export const PartitionCalculator: React.FC<PartitionCalculatorProps> = ({
     }
   });
 
-  useEffect(() => { localStorage.setItem('stc_partition_object_name', objectName); }, [objectName]);
-  useEffect(() => { localStorage.setItem('stc_partition_panel_type', panelType); }, [panelType]);
-  useEffect(() => { localStorage.setItem('stc_partition_cabins', JSON.stringify(cabins)); }, [cabins]);
-  useEffect(() => { localStorage.setItem('stc_partition_installation', JSON.stringify(includeInstallation)); }, [includeInstallation]);
-  useEffect(() => { localStorage.setItem('stc_partition_delivery', JSON.stringify(includeDelivery)); }, [includeDelivery]);
+  // Sync with Firestore database
+  useEffect(() => {
+    const unsubscribe = subscribeToCalculatorData((data) => {
+      if (data) {
+        if (data.stc_partition_object_name) setObjectName(data.stc_partition_object_name);
+        if (data.stc_partition_panel_type) setPanelType(data.stc_partition_panel_type);
+        if (data.stc_partition_cabins) setCabins(data.stc_partition_cabins);
+        if (typeof data.stc_partition_installation === 'boolean') setIncludeInstallation(data.stc_partition_installation);
+        if (typeof data.stc_partition_delivery === 'boolean') setIncludeDelivery(data.stc_partition_delivery);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => { saveCalculatorStateToFirestore('stc_partition_object_name', objectName); }, [objectName]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_partition_panel_type', panelType); }, [panelType]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_partition_cabins', cabins); }, [cabins]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_partition_installation', includeInstallation); }, [includeInstallation]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_partition_delivery', includeDelivery); }, [includeDelivery]);
 
   // Active currency rate
   const activeCurrencyRate = useMemo(() => {

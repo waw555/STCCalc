@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Manufacturer, 
   PanelFormat, 
@@ -12,6 +12,7 @@ import {
   SavedCountertopCalc 
 } from '../../types';
 import { Plus, Trash2, Save, FolderOpen, Check, Calculator, Sparkles, RefreshCw, FileText } from 'lucide-react';
+import { subscribeToCalculatorData, saveCalculatorStateToFirestore } from '../../lib/firebase';
 
 interface CountertopCalculatorProps {
   manufacturers: Manufacturer[];
@@ -89,6 +90,16 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
       return [];
     }
   });
+
+  // Sync saved calculations with Firestore database
+  useEffect(() => {
+    const unsubscribe = subscribeToCalculatorData((data) => {
+      if (data && Array.isArray(data.stc_saved_countertop_calcs)) {
+        setSavedCalcs(data.stc_saved_countertop_calcs);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
 
@@ -300,9 +311,9 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
 
     const updated = [calc, ...savedCalcs];
     setSavedCalcs(updated);
-    localStorage.setItem('stc_saved_countertop_calcs', JSON.stringify(updated));
+    saveCalculatorStateToFirestore('stc_saved_countertop_calcs', updated);
 
-    setSavedSuccessMessage('Расчёт успешно сохранён в историю!');
+    setSavedSuccessMessage('Расчёт успешно сохранён в базу данных!');
     setTimeout(() => setSavedSuccessMessage(null), 3000);
   };
 
@@ -822,12 +833,27 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
                   <span className="text-sm font-extrabold text-blue-600">
                     {formatCurrency(calc.totalRub)}
                   </span>
-                  <button
-                    onClick={() => handleLoadCalc(calc)}
-                    className="text-xs font-semibold text-slate-700 hover:text-blue-600 underline"
-                  >
-                    Загрузить
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleLoadCalc(calc)}
+                      className="text-xs font-semibold text-slate-700 hover:text-blue-600 underline"
+                    >
+                      Загрузить
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm('Удалить расчёт из базы данных?')) {
+                          const updated = savedCalcs.filter(c => c.id !== calc.id);
+                          setSavedCalcs(updated);
+                          saveCalculatorStateToFirestore('stc_saved_countertop_calcs', updated);
+                        }
+                      }}
+                      className="text-xs text-rose-500 hover:text-rose-700 p-1"
+                      title="Удалить расчёт из БД"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

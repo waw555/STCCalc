@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Currency } from '../../types';
 import { Layers, Plus, Trash2, Shield, Check } from 'lucide-react';
+import { subscribeToCalculatorData, saveCalculatorStateToFirestore } from '../../lib/firebase';
 
 interface SubsystemCalculatorProps {
   currencies: Currency[];
@@ -26,10 +27,23 @@ export const SubsystemCalculator: React.FC<SubsystemCalculatorProps> = ({ curren
     try { return localStorage.getItem('stc_subsystem_profile') || 'omega_aluminum'; } catch { return 'omega_aluminum'; }
   });
 
-  useEffect(() => { localStorage.setItem('stc_subsystem_area', String(facadeAreaM2)); }, [facadeAreaM2]);
-  useEffect(() => { localStorage.setItem('stc_subsystem_enclosure', enclosureType); }, [enclosureType]);
-  useEffect(() => { localStorage.setItem('stc_subsystem_fastener', fastenerType); }, [fastenerType]);
-  useEffect(() => { localStorage.setItem('stc_subsystem_profile', profileType); }, [profileType]);
+  // Sync with Firestore database
+  useEffect(() => {
+    const unsubscribe = subscribeToCalculatorData((data) => {
+      if (data) {
+        if (data.stc_subsystem_area) setFacadeAreaM2(Number(data.stc_subsystem_area));
+        if (data.stc_subsystem_enclosure) setEnclosureType(data.stc_subsystem_enclosure);
+        if (data.stc_subsystem_fastener) setFastenerType(data.stc_subsystem_fastener);
+        if (data.stc_subsystem_profile) setProfileType(data.stc_subsystem_profile);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => { saveCalculatorStateToFirestore('stc_subsystem_area', facadeAreaM2); }, [facadeAreaM2]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_subsystem_enclosure', enclosureType); }, [enclosureType]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_subsystem_fastener', fastenerType); }, [fastenerType]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_subsystem_profile', profileType); }, [profileType]);
 
   const activeCurrencyRate = useMemo(() => {
     return currencies.find(c => c.code === selectedCurrency)?.rateToRub || 1;

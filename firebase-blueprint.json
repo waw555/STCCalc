@@ -1,0 +1,32 @@
+{
+  "entities": {
+    "app_data": {
+      "title": "AppData",
+      "description": "App settings, catalogs, and master datasets",
+      "properties": {
+        "currencies": { "type": "array" },
+        "manufacturers": { "type": "array" },
+        "embossings": { "type": "array" },
+        "panelSizes": { "type": "array" },
+        "thicknesses": { "type": "array" },
+        "decors": { "type": "array" },
+        "countertopSettings": { "type": "object" },
+        "productTypes": { "type": "array" },
+        "services": { "type": "array" },
+        "suppliers": { "type": "array" },
+        "organization": { "type": "object" },
+        "users": { "type": "array" }
+      }
+    },
+    "calculations": {
+      "title": "Calculations",
+      "description": "Saved calculator projects",
+      "properties": {
+        "type": { "type": "string" },
+        "name": { "type": "string" },
+        "data": { "type": "object" },
+        "createdAt": { "type": "string" }
+      }
+    }
+  }
+}

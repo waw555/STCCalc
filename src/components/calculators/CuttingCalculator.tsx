@@ -6,6 +6,7 @@ import {
   RotateCw, ArrowLeftRight, ArrowUpDown, Maximize2, Grid, Eye, ZoomIn, Compass, Shield,
   Database, Search, Filter, BookOpen, ChevronDown
 } from 'lucide-react';
+import { subscribeToCalculatorData, saveCalculatorStateToFirestore } from '../../lib/firebase';
 
 interface CuttingCalculatorProps {
   currencies: Currency[];
@@ -557,14 +558,20 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showSavedList, setShowSavedList] = useState(false);
 
-  // Sync saved calcs to localStorage
+  // Sync saved calcs to Firestore database
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedCalcs));
-    } catch (err) {
-      console.error('Failed to save to localStorage:', err);
-    }
-  }, [savedCalcs]);
+    const unsubscribe = subscribeToCalculatorData((data) => {
+      if (data && Array.isArray(data[STORAGE_KEY])) {
+        setSavedCalcs(data[STORAGE_KEY]);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const saveCalcsToDb = (calcs: SavedCuttingCalculation[]) => {
+    setSavedCalcs(calcs);
+    saveCalculatorStateToFirestore(STORAGE_KEY, calcs);
+  };
 
   // Currency rate conversion
   const activeCurrencyRate = useMemo(() => {
@@ -753,9 +760,10 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({
       totalPiecesCount: layoutResult.totalPiecesCount,
     };
 
-    setSavedCalcs(prev => [newSavedItem, ...prev]);
+    const updated = [newSavedItem, ...savedCalcs];
+    saveCalcsToDb(updated);
     setIsSaveModalOpen(false);
-    showToast(`Раскрой «${newSavedItem.title}» успешно сохранён!`);
+    showToast(`Раскрой «${newSavedItem.title}» успешно сохранён в базу данных!`);
   };
 
   const handleLoadSavedCalc = (saved: SavedCuttingCalculation) => {
@@ -771,8 +779,9 @@ export const CuttingCalculator: React.FC<CuttingCalculatorProps> = ({
   };
 
   const handleDeleteSavedCalc = (id: string, title: string) => {
-    setSavedCalcs(prev => prev.filter(item => item.id !== id));
-    showToast(`Удален сохранённый раскрой «${title}»`);
+    const updated = savedCalcs.filter(item => item.id !== id);
+    saveCalcsToDb(updated);
+    showToast(`Удален сохранённый раскрой «${title}»из базы данных`);
   };
 
   const showToast = (msg: string) => {

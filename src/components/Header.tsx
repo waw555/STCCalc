@@ -1,6 +1,6 @@
 import React from 'react';
 import { Currency, UserSession } from '../types';
-import { RefreshCw, UserCheck, LogIn, LogOut, Printer, Calculator } from 'lucide-react';
+import { RefreshCw, UserCheck, LogIn, LogOut, Printer, Calculator, Cloud, CheckCircle2 } from 'lucide-react';
 
 interface HeaderProps {
   currencies: Currency[];
@@ -12,6 +12,7 @@ interface HeaderProps {
   onOpenLogin: () => void;
   onLogout: () => void;
   orgName: string;
+  isCloudSynced?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLogin,
   onLogout,
   orgName,
+  isCloudSynced = true,
 }) => {
   const activeEur = currencies.find(c => c.code === 'EUR')?.rateToRub || 98.45;
   const activeUsd = currencies.find(c => c.code === 'USD')?.rateToRub || 89.20;
@@ -46,8 +48,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-400/30">
                   HPL / Компакт-плиты
                 </span>
+                {isCloudSynced ? (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Облако БД активна</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1 animate-pulse">
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>Подключение к БД...</span>
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-xs text-slate-400 font-medium mt-0.5">
                 {orgName || 'Калькулятор коммерческих расчётов и прайс-листы'}
               </p>
             </div>

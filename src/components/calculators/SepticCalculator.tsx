@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Currency } from '../../types';
 import { Droplets, ShieldCheck, Check } from 'lucide-react';
+import { subscribeToCalculatorData, saveCalculatorStateToFirestore } from '../../lib/firebase';
 
 interface SepticCalculatorProps {
   currencies: Currency[];
@@ -30,10 +31,23 @@ export const SepticCalculator: React.FC<SepticCalculatorProps> = ({ currencies, 
     } catch { return true; }
   });
 
-  useEffect(() => { localStorage.setItem('stc_septic_people', String(peopleCount)); }, [peopleCount]);
-  useEffect(() => { localStorage.setItem('stc_septic_soil', soilType); }, [soilType]);
-  useEffect(() => { localStorage.setItem('stc_septic_washing', JSON.stringify(hasWashingMachine)); }, [hasWashingMachine]);
-  useEffect(() => { localStorage.setItem('stc_septic_bath', JSON.stringify(hasBath)); }, [hasBath]);
+  // Sync with Firestore database
+  useEffect(() => {
+    const unsubscribe = subscribeToCalculatorData((data) => {
+      if (data) {
+        if (data.stc_septic_people) setPeopleCount(Number(data.stc_septic_people));
+        if (data.stc_septic_soil) setSoilType(data.stc_septic_soil);
+        if (typeof data.stc_septic_washing === 'boolean') setHasWashingMachine(data.stc_septic_washing);
+        if (typeof data.stc_septic_bath === 'boolean') setHasBath(data.stc_septic_bath);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => { saveCalculatorStateToFirestore('stc_septic_people', peopleCount); }, [peopleCount]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_septic_soil', soilType); }, [soilType]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_septic_washing', hasWashingMachine); }, [hasWashingMachine]);
+  useEffect(() => { saveCalculatorStateToFirestore('stc_septic_bath', hasBath); }, [hasBath]);
 
   const activeCurrencyRate = useMemo(() => {
     return currencies.find(c => c.code === selectedCurrency)?.rateToRub || 1;
