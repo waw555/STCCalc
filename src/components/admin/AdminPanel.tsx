@@ -1234,6 +1234,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Nomenclature 1C - FIRST */}
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                  <span className="text-blue-900">Номенклатура (1С)</span>
+                  <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-200 px-1.5 py-0.5 rounded font-bold">1С Справочник</span>
+                </label>
+                <input
+                  type="text"
+                  value={panelNomenclature1C}
+                  onChange={(e) => setPanelNomenclature1C(e.target.value)}
+                  placeholder="Номенклатурное наименование из 1С..."
+                  className="w-full text-xs font-bold border border-blue-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-slate-900"
+                />
+              </div>
+
               {/* Manufacturer */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
@@ -1288,18 +1303,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setPanelDecorName(e.target.value)}
                   placeholder="Например: Canyon Wood"
                   required
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Nomenclature 1C */}
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-slate-700 mb-1">Номенклатура (1С)</label>
-                <input
-                  type="text"
-                  value={panelNomenclature1C}
-                  onChange={(e) => setPanelNomenclature1C(e.target.value)}
-                  placeholder="Номенклатурное наименование из 1С..."
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -1404,8 +1407,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-3">№</th>
+                  <th className="py-3 px-3">Номенклатура (1С)</th>
                   <th className="py-3 px-3">Производитель</th>
-                  <th className="py-3 px-3">Номенклатура (1С) / Декор</th>
+                  <th className="py-3 px-3">Декор / Артикул</th>
                   <th className="py-3 px-3">Формат (Д×Ш мм)</th>
                   <th className="py-3 px-3">Тиснение</th>
                   <th className="py-3 px-3">Толщина</th>
@@ -1437,21 +1441,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     return (
                       <tr key={panel.id} className="hover:bg-slate-50 transition">
                         <td className="py-2.5 px-3 font-semibold text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-3">
+                          {panel.nomenclature1C ? (
+                            <span className="font-bold text-slate-900 bg-amber-50 text-amber-900 border border-amber-200 px-2 py-1 rounded text-[11px] font-mono inline-block">
+                              {panel.nomenclature1C}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">—</span>
+                          )}
+                        </td>
                         <td className="py-2.5 px-3 font-semibold text-slate-900">
                           {mfg ? mfg.fullName : '—'}
                         </td>
                         <td className="py-2.5 px-3">
                           <div className="font-bold text-slate-900">{panel.decorName || panel.name}</div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {panel.decorNumber && (
-                              <span className="text-[10px] text-slate-500 font-mono">Арт: {panel.decorNumber}</span>
-                            )}
-                            {panel.nomenclature1C && (
-                              <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded font-mono">
-                                1С: {panel.nomenclature1C}
-                              </span>
-                            )}
-                          </div>
+                          {panel.decorNumber && (
+                            <div className="text-[10px] text-slate-500 font-mono mt-0.5">Арт: {panel.decorNumber}</div>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 font-medium text-slate-700">
                           {panel.heightMm} × {panel.widthMm} мм ({area} м²)
