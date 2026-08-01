@@ -208,25 +208,28 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* App Header */}
-      <Header
-        currencies={currencies}
-        selectedCurrency={selectedCurrency}
-        onSelectCurrency={setSelectedCurrency}
-        onRefreshRates={handleRefreshRates}
-        isRefreshing={isRefreshingRates}
-        userSession={userSession}
-        onOpenLogin={() => setIsLoginModalOpen(true)}
-        onLogout={() => setUserSession({ isLoggedIn: false, username: '', role: 'user' })}
-        orgName={organization.fullName}
-      />
+      {/* Sticky Header & Navigation Container */}
+      <div className="sticky top-0 z-30 no-print shadow-md">
+        {/* App Header */}
+        <Header
+          currencies={currencies}
+          selectedCurrency={selectedCurrency}
+          onSelectCurrency={setSelectedCurrency}
+          onRefreshRates={handleRefreshRates}
+          isRefreshing={isRefreshingRates}
+          userSession={userSession}
+          onOpenLogin={() => setIsLoginModalOpen(true)}
+          onLogout={() => setUserSession({ isLoggedIn: false, username: '', role: 'user' })}
+          orgName={organization.fullName}
+        />
 
-      {/* Main Tab Navigation */}
-      <Navigation
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        isAdmin={userSession.role === 'admin'}
-      />
+        {/* Main Tab Navigation */}
+        <Navigation
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isAdmin={userSession.role === 'admin'}
+        />
+      </div>
 
       {/* Main Active Tab Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
