@@ -192,11 +192,22 @@ export const PriceListCountertops: React.FC<PriceListProps> = ({
           {filteredDecors.map((decor) => {
             const mfg = manufacturers.find(m => m.id === decor.manufacturerId);
             const emb = embossings.find(e => e.id === decor.embossingId);
-            const costEur = decor.cost || 58;
-            const markup = decor.markup || 46.5;
-            const priceRubPerM2 = costEur * eurRate * (1 + markup / 100);
+            const decorCurrCode = decor.currency || 'EUR';
+            const decorRate = currencies.find(c => c.code === decorCurrCode)?.rateToRub || eurRate;
+
+            let priceRubPerM2 = 0;
+            if (decor.pricePerM2 && decor.pricePerM2 > 0) {
+              priceRubPerM2 = decor.pricePerM2 * decorRate;
+            } else {
+              const cost = decor.cost || 58;
+              const markup = decor.markup || 46.5;
+              priceRubPerM2 = cost * decorRate * (1 + markup / 100);
+            }
+
             const sheetAreaM2 = (decor.widthMm * decor.heightMm) / 1000000;
-            const sheetPriceRub = priceRubPerM2 * sheetAreaM2;
+            const sheetPriceRub = (decor.pricePerSheet && decor.pricePerSheet > 0)
+              ? decor.pricePerSheet * decorRate
+              : priceRubPerM2 * sheetAreaM2;
 
             return (
               <div
@@ -296,11 +307,22 @@ export const PriceListCountertops: React.FC<PriceListProps> = ({
                 {filteredDecors.map((decor) => {
                   const mfg = manufacturers.find(m => m.id === decor.manufacturerId);
                   const emb = embossings.find(e => e.id === decor.embossingId);
-                  const costEur = decor.cost || 58;
-                  const markup = decor.markup || 46.5;
-                  const priceRubPerM2 = costEur * eurRate * (1 + markup / 100);
+                  const decorCurrCode = decor.currency || 'EUR';
+                  const decorRate = currencies.find(c => c.code === decorCurrCode)?.rateToRub || eurRate;
+
+                  let priceRubPerM2 = 0;
+                  if (decor.pricePerM2 && decor.pricePerM2 > 0) {
+                    priceRubPerM2 = decor.pricePerM2 * decorRate;
+                  } else {
+                    const cost = decor.cost || 58;
+                    const markup = decor.markup || 46.5;
+                    priceRubPerM2 = cost * decorRate * (1 + markup / 100);
+                  }
+
                   const sheetAreaM2 = (decor.widthMm * decor.heightMm) / 1000000;
-                  const sheetPriceRub = priceRubPerM2 * sheetAreaM2;
+                  const sheetPriceRub = (decor.pricePerSheet && decor.pricePerSheet > 0)
+                    ? decor.pricePerSheet * decorRate
+                    : priceRubPerM2 * sheetAreaM2;
 
                   return (
                     <tr key={decor.id} className="hover:bg-slate-50 transition">

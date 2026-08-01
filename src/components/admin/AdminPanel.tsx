@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Currency, 
   Manufacturer, 
@@ -156,32 +156,138 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return ps.volumeM2 || Number(((ps.heightMm * ps.widthMm) / 1000000).toFixed(3));
   };
 
+  const [panelCostPerM2, setPanelCostPerM2] = useState<number>(58.0);
+  const [panelCostPerSheet, setPanelCostPerSheet] = useState<number>(() => {
+    const initArea = panelSizes[0] ? (panelSizes[0].volumeM2 || Number(((panelSizes[0].heightMm * panelSizes[0].widthMm) / 1000000).toFixed(3))) : 3.965;
+    return Number((58.0 * initArea).toFixed(2));
+  });
+  const [panelMarkup, setPanelMarkup] = useState<number>(46.5);
   const [panelPricePerM2, setPanelPricePerM2] = useState<number>(85.0);
   const [panelPricePerSheet, setPanelPricePerSheet] = useState<number>(() => {
     const initArea = panelSizes[0] ? (panelSizes[0].volumeM2 || Number(((panelSizes[0].heightMm * panelSizes[0].widthMm) / 1000000).toFixed(3))) : 3.965;
     return Number((85.0 * initArea).toFixed(2));
   });
 
+  // Track currency changes to recalculate entered panel form prices
+  const prevCurrencyRef = useRef<string>(selectedCurrency);
+  useEffect(() => {
+    if (selectedCurrency && selectedCurrency !== prevCurrencyRef.current) {
+      const oldRate = currencies.find(c => c.code === prevCurrencyRef.current)?.rateToRub || 1;
+      const newRate = currencies.find(c => c.code === selectedCurrency)?.rateToRub || 1;
+      if (oldRate > 0 && newRate > 0 && oldRate !== newRate) {
+        const ratio = oldRate / newRate;
+        setPanelCostPerM2(prev => Number((prev * ratio).toFixed(2)));
+        setPanelCostPerSheet(prev => Number((prev * ratio).toFixed(2)));
+        setPanelPricePerM2(prev => Number((prev * ratio).toFixed(2)));
+        setPanelPricePerSheet(prev => Number((prev * ratio).toFixed(2)));
+      }
+      setPanelCurrency(selectedCurrency);
+      prevCurrencyRef.current = selectedCurrency;
+    }
+  }, [selectedCurrency, currencies]);
+
+  const handleCurrencyChange = (newCurr: string) => {
+    if (newCurr === panelCurrency) return;
+    const oldRate = currencies.find(c => c.code === panelCurrency)?.rateToRub || 1;
+    const newRate = currencies.find(c => c.code === newCurr)?.rateToRub || 1;
+
+    if (oldRate > 0 && newRate > 0) {
+      const ratio = oldRate / newRate;
+      setPanelCostPerM2(prev => Number((prev * ratio).toFixed(2)));
+      setPanelCostPerSheet(prev => Number((prev * ratio).toFixed(2)));
+      setPanelPricePerM2(prev => Number((prev * ratio).toFixed(2)));
+      setPanelPricePerSheet(prev => Number((prev * ratio).toFixed(2)));
+    }
+    setPanelCurrency(newCurr);
+    prevCurrencyRef.current = newCurr;
+  };
+
+  const handleCostPerM2Change = (val: number) => {
+    setPanelCostPerM2(val);
+    const area = getFormatArea(panelSizeId);
+    const costSheet = Number((val * area).toFixed(2));
+    setPanelCostPerSheet(costSheet);
+
+    if (panelMarkup > 0) {
+      const pM2 = Number((val * (1 + panelMarkup / 100)).toFixed(2));
+      const pSheet = Number((costSheet * (1 + panelMarkup / 100)).toFixed(2));
+      setPanelPricePerM2(pM2);
+      setPanelPricePerSheet(pSheet);
+    } else if (panelPricePerM2 > 0 && val > 0) {
+      const mk = Number((((panelPricePerM2 - val) / val) * 100).toFixed(1));
+      setPanelMarkup(mk);
+    }
+  };
+
+  const handleCostPerSheetChange = (val: number) => {
+    setPanelCostPerSheet(val);
+    const area = getFormatArea(panelSizeId);
+    const costM2 = area > 0 ? Number((val / area).toFixed(2)) : 0;
+    setPanelCostPerM2(costM2);
+
+    if (panelMarkup > 0) {
+      const pM2 = Number((costM2 * (1 + panelMarkup / 100)).toFixed(2));
+      const pSheet = Number((val * (1 + panelMarkup / 100)).toFixed(2));
+      setPanelPricePerM2(pM2);
+      setPanelPricePerSheet(pSheet);
+    } else if (panelPricePerSheet > 0 && val > 0) {
+      const mk = Number((((panelPricePerSheet - val) / val) * 100).toFixed(1));
+      setPanelMarkup(mk);
+    }
+  };
+
   const handlePricePerM2Change = (val: number) => {
     setPanelPricePerM2(val);
     const area = getFormatArea(panelSizeId);
-    if (area > 0) {
-      setPanelPricePerSheet(Number((val * area).toFixed(2)));
+    const priceSheet = Number((val * area).toFixed(2));
+    setPanelPricePerSheet(priceSheet);
+
+    if (panelCostPerM2 > 0) {
+      const mk = Number((((val - panelCostPerM2) / panelCostPerM2) * 100).toFixed(1));
+      setPanelMarkup(mk);
+    } else if (panelMarkup > 0) {
+      const costM2 = Number((val / (1 + panelMarkup / 100)).toFixed(2));
+      setPanelCostPerM2(costM2);
+      setPanelCostPerSheet(Number((costM2 * area).toFixed(2)));
     }
   };
 
   const handlePricePerSheetChange = (val: number) => {
     setPanelPricePerSheet(val);
     const area = getFormatArea(panelSizeId);
-    if (area > 0) {
-      setPanelPricePerM2(Number((val / area).toFixed(2)));
+    const priceM2 = area > 0 ? Number((val / area).toFixed(2)) : 0;
+    setPanelPricePerM2(priceM2);
+
+    if (panelCostPerSheet > 0) {
+      const mk = Number((((val - panelCostPerSheet) / panelCostPerSheet) * 100).toFixed(1));
+      setPanelMarkup(mk);
+    } else if (panelMarkup > 0) {
+      const costM2 = Number((priceM2 / (1 + panelMarkup / 100)).toFixed(2));
+      setPanelCostPerM2(costM2);
+      setPanelCostPerSheet(Number((costM2 * area).toFixed(2)));
+    }
+  };
+
+  const handleMarkupChange = (val: number) => {
+    setPanelMarkup(val);
+    const area = getFormatArea(panelSizeId);
+    if (panelCostPerM2 > 0) {
+      const priceM2 = Number((panelCostPerM2 * (1 + val / 100)).toFixed(2));
+      const priceSheet = Number((panelCostPerSheet * (1 + val / 100)).toFixed(2));
+      setPanelPricePerM2(priceM2);
+      setPanelPricePerSheet(priceSheet);
+    } else if (panelPricePerM2 > 0) {
+      const costM2 = Number((panelPricePerM2 / (1 + val / 100)).toFixed(2));
+      setPanelCostPerM2(costM2);
+      setPanelCostPerSheet(Number((costM2 * area).toFixed(2)));
     }
   };
 
   const handlePanelSizeChange = (newSizeId: number) => {
     setPanelSizeId(newSizeId);
     const area = getFormatArea(newSizeId);
-    if (area > 0 && panelPricePerM2 > 0) {
+    if (area > 0) {
+      setPanelCostPerSheet(Number((panelCostPerM2 * area).toFixed(2)));
       setPanelPricePerSheet(Number((panelPricePerM2 * area).toFixed(2)));
     }
   };
@@ -216,11 +322,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       embossingId: panelEmbossingId,
       panelSizeId: panelSizeId,
       thicknessId: panelThicknessId,
+      cost: panelCostPerM2,
+      costPerSheet: panelCostPerSheet,
       pricePerM2: panelPricePerM2,
       pricePerSheet: panelPricePerSheet,
-      cost: Number((panelPricePerM2 / 1.465).toFixed(2)),
-      costPerSheet: Number((panelPricePerSheet / 1.465).toFixed(2)),
-      markup: 46.5,
+      markup: panelMarkup,
       currency: panelCurrency,
       isStockDecor: panelIsStock,
       isStockProgram: panelIsStock,
@@ -1346,21 +1452,71 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </select>
               </div>
 
+              {/* Currency */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Валюта цены</label>
+                <select
+                  value={panelCurrency}
+                  onChange={(e) => handleCurrencyChange(e.target.value)}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {currencies.map(c => (
+                    <option key={c.code} value={c.code}>{c.code} ({c.name})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cost per M2 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Себестоимость / м² ({panelCurrency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={panelCostPerM2}
+                  onChange={(e) => handleCostPerM2Change(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Cost per Sheet */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Себестоимость / лист ({panelCurrency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={panelCostPerSheet}
+                  onChange={(e) => handleCostPerSheetChange(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Markup */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Наценка (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={panelMarkup}
+                  onChange={(e) => handleMarkupChange(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 text-amber-800"
+                />
+              </div>
+
               {/* Price per M2 */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Цена за м² ({panelCurrency})</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Цена за м² Прайс ({panelCurrency})</label>
                 <input
                   type="number"
                   step="0.01"
                   value={panelPricePerM2}
                   onChange={(e) => handlePricePerM2Change(Number(e.target.value))}
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 font-bold"
                 />
               </div>
 
               {/* Price per Sheet */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Цена за лист ({panelCurrency})</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Цена за лист Прайс ({panelCurrency})</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1369,26 +1525,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 text-emerald-700 font-bold"
                 />
               </div>
-
-              {/* Currency */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Валюта цены</label>
-                <select
-                  value={panelCurrency}
-                  onChange={(e) => setPanelCurrency(e.target.value)}
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {currencies.map(c => (
-                    <option key={c.code} value={c.code}>{c.code} ({c.name})</option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200 text-xs">
-              <div className="flex items-center gap-4 text-slate-700">
+              <div className="flex flex-wrap items-center gap-3 text-slate-700">
                 <span className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-blue-900 font-medium">
-                  Площадь выбранного формата: <strong>{getFormatArea(panelSizeId)} м²</strong> | Авторасчет: <strong>1 м² = {panelPricePerM2} {panelCurrency}</strong> ↔ <strong>1 лист = {panelPricePerSheet} {panelCurrency}</strong>
+                  Площадь: <strong>{getFormatArea(panelSizeId)} м²</strong> | Себест.: <strong>{panelCostPerM2} {panelCurrency}/м²</strong> ({panelCostPerSheet} {panelCurrency}/лист) | Прайс (+{panelMarkup}%): <strong>{panelPricePerM2} {panelCurrency}/м²</strong> ({panelPricePerSheet} {panelCurrency}/лист)
                 </span>
                 <label className="flex items-center gap-1.5 cursor-pointer font-semibold whitespace-nowrap">
                   <input
@@ -1422,6 +1564,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <th className="py-3 px-3">Формат (Д×Ш мм)</th>
                   <th className="py-3 px-3">Тиснение</th>
                   <th className="py-3 px-3">Толщина</th>
+                  <th className="py-3 px-3 text-right">Себестоимость / м²</th>
                   <th className="py-3 px-3 text-right">Цена / м²</th>
                   <th className="py-3 px-3 text-right">Цена / лист</th>
                   <th className="py-3 px-3 text-center">Статус</th>
@@ -1444,8 +1587,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     const mfg = manufacturers.find(m => m.id === panel.manufacturerId);
                     const emb = embossings.find(e => e.id === panel.embossingId);
                     const area = Number(((panel.heightMm * panel.widthMm) / 1000000).toFixed(3));
-                    const priceM2 = panel.pricePerM2 || 0;
-                    const priceSheet = panel.pricePerSheet || Number((area * priceM2).toFixed(2));
+                    
+                    const pCurr = panel.currency || 'EUR';
+                    const pRate = currencies.find(c => c.code === pCurr)?.rateToRub || 98.45;
+                    const tRate = currencies.find(c => c.code === selectedCurrency)?.rateToRub || 1;
+
+                    const rawCostM2 = panel.cost || 0;
+                    const rawPriceM2 = panel.pricePerM2 || (rawCostM2 ? rawCostM2 * (1 + (panel.markup || 0) / 100) : 0);
+                    const rawPriceSheet = panel.pricePerSheet || Number((area * rawPriceM2).toFixed(2));
+
+                    const displayCostM2 = Number(((rawCostM2 * pRate) / tRate).toFixed(2));
+                    const displayPriceM2 = Number(((rawPriceM2 * pRate) / tRate).toFixed(2));
+                    const displayPriceSheet = Number(((rawPriceSheet * pRate) / tRate).toFixed(2));
 
                     return (
                       <tr key={panel.id} className="hover:bg-slate-50 transition">
@@ -1477,11 +1630,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <td className="py-2.5 px-3 font-semibold text-slate-900">
                           {panel.thicknessMm || 12} мм
                         </td>
+                        <td className="py-2.5 px-3 text-right font-medium text-slate-600">
+                          {displayCostM2} {selectedCurrency}
+                        </td>
                         <td className="py-2.5 px-3 text-right font-bold text-slate-900">
-                          {priceM2} {panel.currency}
+                          {displayPriceM2} {selectedCurrency}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                          {priceSheet} {panel.currency}
+                          {displayPriceSheet} {selectedCurrency}
                         </td>
                         <td className="py-2.5 px-3 text-center">
                           {panel.isStockProgram ? (
