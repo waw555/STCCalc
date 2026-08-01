@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Currency, 
   Manufacturer, 
@@ -12,7 +12,7 @@ import {
   UserSession,
   UserAccount 
 } from '../../types';
-import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil, Users, UserPlus, ShieldCheck, UserCheck, Lock, Mail, User as UserIcon, Search, Key, Eye, EyeOff, RefreshCw, Maximize2, Palette, Ruler, Database } from 'lucide-react';
+import { Settings, DollarSign, Building2, Layers, Grid, Sliders, ShieldAlert, Plus, Trash2, Check, Save, Globe, Upload, Image as ImageIcon, FileText, X, Pencil, Users, UserPlus, ShieldCheck, UserCheck, Lock, Mail, User as UserIcon, Search, Key, Eye, EyeOff, RefreshCw, Maximize2, Palette, Ruler, Database, Filter } from 'lucide-react';
 import { fetchCbrRates, CbrValute, POPULAR_CBR_CURRENCIES } from '../../services/cbrRates';
 import { 
   generateDecorFilePath, 
@@ -109,6 +109,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [panelCurrency, setPanelCurrency] = useState<string>('EUR');
   const [panelIsStock, setPanelIsStock] = useState<boolean>(true);
   const [panelSearch, setPanelSearch] = useState('');
+
+  // Filters by Manufacturer for sub-tabs
+  const [decorMfgFilter, setDecorMfgFilter] = useState<number | 'all'>('all');
+  const [formatMfgFilter, setFormatMfgFilter] = useState<number | 'all'>('all');
+  const [embossingMfgFilter, setEmbossingMfgFilter] = useState<number | 'all'>('all');
+
+  // Available Formats and Embossings for currently selected Manufacturer in Panel Form
+  const availFormatsForPanelMfg = useMemo(() => {
+    const matched = panelSizes.filter(ps => !ps.manufacturerId || ps.manufacturerId === panelMfgId);
+    return matched.length > 0 ? matched : panelSizes;
+  }, [panelSizes, panelMfgId]);
+
+  const availEmbossingsForPanelMfg = useMemo(() => {
+    const matched = embossings.filter(emb => !emb.manufacturerId || emb.manufacturerId === panelMfgId);
+    return matched.length > 0 ? matched : embossings;
+  }, [embossings, panelMfgId]);
+
+  const handlePanelMfgChange = (mfgId: number) => {
+    setPanelMfgId(mfgId);
+    // Check if current format belongs to new mfg, else select first matching
+    const formats = panelSizes.filter(ps => !ps.manufacturerId || ps.manufacturerId === mfgId);
+    if (formats.length > 0 && !formats.some(f => f.id === panelSizeId)) {
+      setPanelSizeId(formats[0].id);
+    }
+    // Check if current embossing belongs to new mfg, else select first matching
+    const embList = embossings.filter(e => !e.manufacturerId || e.manufacturerId === mfgId);
+    if (embList.length > 0 && !embList.some(e => e.id === panelEmbossingId)) {
+      setPanelEmbossingId(embList[0].id);
+    }
+  };
 
   // Format area calculation helper
   const getFormatArea = (sizeId: number): number => {
@@ -1209,7 +1239,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <label className="block text-xs font-bold text-slate-700 mb-1">Производитель</label>
                 <select
                   value={panelMfgId}
-                  onChange={(e) => setPanelMfgId(Number(e.target.value))}
+                  onChange={(e) => handlePanelMfgChange(Number(e.target.value))}
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {manufacturers.map(m => (
@@ -1226,7 +1256,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => handlePanelSizeChange(Number(e.target.value))}
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {panelSizes.map(ps => {
+                  {availFormatsForPanelMfg.map((ps: PanelSize) => {
                     const area = ps.volumeM2 || Number(((ps.heightMm * ps.widthMm) / 1000000).toFixed(3));
                     return (
                       <option key={ps.id} value={ps.id}>
@@ -1282,7 +1312,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setPanelEmbossingId(Number(e.target.value))}
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {embossings.map(emb => (
+                  {availEmbossingsForPanelMfg.map((emb: Embossing) => (
                     <option key={emb.id} value={emb.id}>
                       {emb.name} ({emb.shortName || '—'})
                     </option>
@@ -1544,32 +1574,80 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           {/* List of Decors */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Все декоры в системе ({decors.length})</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-bold text-slate-700">Фильтр декоров по производителю:</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setDecorMfgFilter('all')}
+                  className={`px-3 py-1 rounded-lg font-semibold transition ${
+                    decorMfgFilter === 'all'
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Все ({decors.length})
+                </button>
+                {manufacturers.map(m => {
+                  const count = decors.filter(d => d.manufacturerId === m.id).length;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setDecorMfgFilter(m.id)}
+                      className={`px-3 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                        decorMfgFilter === m.id
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{m.fullName}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        decorMfgFilter === m.id ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {decors.map(d => {
-                const mfg = manufacturers.find(m => m.id === d.manufacturerId);
-                return (
-                  <div key={d.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-2 text-xs">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-bold text-slate-900">{d.name}</div>
-                        <div className="text-slate-500 text-[11px]">{mfg?.fullName} | № {d.decorNumber} | {d.cost} €/м²</div>
+              {decors
+                .filter(d => decorMfgFilter === 'all' || d.manufacturerId === decorMfgFilter)
+                .map(d => {
+                  const mfg = manufacturers.find(m => m.id === d.manufacturerId);
+                  return (
+                    <div key={d.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-2 text-xs hover:border-blue-300 transition">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200">
+                              {mfg?.fullName || 'Производитель'}
+                            </span>
+                          </div>
+                          <div className="font-bold text-slate-900">{d.name}</div>
+                          <div className="text-slate-500 text-[11px] font-medium">Арт: {d.decorNumber || '—'} | {d.cost} €/м²</div>
+                        </div>
+                        <button
+                          onClick={() => onDeleteDecor(d.id)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => onDeleteDecor(d.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {d.decorPhotoPath && (
+                        <div className="font-mono text-[10px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 truncate" title={d.decorPhotoPath}>
+                          {d.decorPhotoPath}
+                        </div>
+                      )}
                     </div>
-                    {d.decorPhotoPath && (
-                      <div className="font-mono text-[10px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 truncate" title={d.decorPhotoPath}>
-                        {d.decorPhotoPath}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -1583,7 +1661,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <Maximize2 className="w-5 h-5 text-blue-600" />
               <span>Форматы листов HPL</span>
             </h2>
-            <p className="text-xs text-slate-500">Справочник габаритных форматов плит (длина × ширина, площадь в м²)</p>
+            <p className="text-xs text-slate-500">Справочник габаритных форматов плит (длина × ширина, площадь в м²), привязанных к производителям</p>
           </div>
 
           {/* Add Format Form */}
@@ -1651,33 +1729,78 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           {/* List of Formats */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Доступные форматы листов ({panelSizes.length})</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-bold text-slate-700">Фильтр форматов по производителю:</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setFormatMfgFilter('all')}
+                  className={`px-3 py-1 rounded-lg font-semibold transition ${
+                    formatMfgFilter === 'all'
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Все ({panelSizes.length})
+                </button>
+                {manufacturers.map(m => {
+                  const count = panelSizes.filter(s => s.manufacturerId === m.id).length;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setFormatMfgFilter(m.id)}
+                      className={`px-3 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                        formatMfgFilter === m.id
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{m.fullName}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        formatMfgFilter === m.id ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {panelSizes.map(ps => {
-                const mfg = manufacturers.find(m => m.id === ps.manufacturerId);
-                const area = ps.volumeM2 || Number(((ps.heightMm * ps.widthMm) / 1000000).toFixed(3));
-                return (
-                  <div key={ps.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-2 text-xs hover:border-slate-300 transition">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-bold text-slate-900 text-sm">
-                          {ps.heightMm} × {ps.widthMm} мм
+              {panelSizes
+                .filter(ps => formatMfgFilter === 'all' || ps.manufacturerId === formatMfgFilter)
+                .map(ps => {
+                  const mfg = manufacturers.find(m => m.id === ps.manufacturerId);
+                  const area = ps.volumeM2 || Number(((ps.heightMm * ps.widthMm) / 1000000).toFixed(3));
+                  return (
+                    <div key={ps.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-2 text-xs hover:border-blue-300 transition">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">
+                            {ps.heightMm} × {ps.widthMm} мм
+                          </div>
+                          <div className="mt-1">
+                            <span className="bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded">
+                              {mfg ? mfg.fullName : 'Все производители'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-slate-500 text-xs font-medium">
-                          {mfg ? mfg.fullName : 'Все производители'}
-                        </div>
+                        {onDeletePanelSize && (
+                          <button
+                            type="button"
+                            onClick={() => onDeletePanelSize(ps.id)}
+                            title="Удалить формат"
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
-                      {onDeletePanelSize && (
-                        <button
-                          type="button"
-                          onClick={() => onDeletePanelSize(ps.id)}
-                          title="Удалить формат"
-                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
                     
                     <div className="flex items-center justify-between pt-2 border-t border-slate-200/70 text-[11px]">
                       <span className="font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
@@ -1860,11 +1983,56 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </form>
 
-          {/* List of Embossings Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {embossings.map(emb => {
-              const mfg = manufacturers.find(m => m.id === emb.manufacturerId);
-              const isEditing = editingEmbossingId === emb.id;
+          {/* List of Embossings Filter & Grid */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-bold text-slate-700">Фильтр тиснений по производителю:</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setEmbossingMfgFilter('all')}
+                  className={`px-3 py-1 rounded-lg font-semibold transition ${
+                    embossingMfgFilter === 'all'
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Все ({embossings.length})
+                </button>
+                {manufacturers.map(m => {
+                  const count = embossings.filter(e => e.manufacturerId === m.id).length;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setEmbossingMfgFilter(m.id)}
+                      className={`px-3 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                        embossingMfgFilter === m.id
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{m.fullName}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        embossingMfgFilter === m.id ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {embossings
+                .filter(emb => embossingMfgFilter === 'all' || emb.manufacturerId === embossingMfgFilter)
+                .map(emb => {
+                  const mfg = manufacturers.find(m => m.id === emb.manufacturerId);
+                  const isEditing = editingEmbossingId === emb.id;
 
               if (isEditing) {
                 return (
@@ -2007,6 +2175,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       )}

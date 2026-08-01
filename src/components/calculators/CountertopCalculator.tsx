@@ -98,6 +98,16 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
   }, [decors, selectedDecorId]);
 
   // Filtered decors based on manufacturer, embossing, thickness, size filters
+  const availableEmbossings = useMemo(() => {
+    if (selectedManufacturerId === 'all') return embossings;
+    return embossings.filter(e => !e.manufacturerId || e.manufacturerId === selectedManufacturerId);
+  }, [embossings, selectedManufacturerId]);
+
+  const availableSizes = useMemo(() => {
+    if (selectedManufacturerId === 'all') return panelSizes;
+    return panelSizes.filter(s => !s.manufacturerId || s.manufacturerId === selectedManufacturerId);
+  }, [panelSizes, selectedManufacturerId]);
+
   const filteredDecors = useMemo(() => {
     return decors.filter(d => {
       if (selectedManufacturerId !== 'all' && d.manufacturerId !== selectedManufacturerId) return false;
@@ -386,7 +396,7 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="all">Все тиснения</option>
-                {embossings.map(e => (
+                {availableEmbossings.map(e => (
                   <option key={e.id} value={e.id}>{e.name} ({e.shortName})</option>
                 ))}
               </select>
@@ -416,7 +426,7 @@ export const CountertopCalculator: React.FC<CountertopCalculatorProps> = ({
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="all">Все форматы</option>
-                {panelSizes.map(s => (
+                {availableSizes.map(s => (
                   <option key={s.id} value={s.id}>{s.heightMm}×{s.widthMm} мм</option>
                 ))}
               </select>
