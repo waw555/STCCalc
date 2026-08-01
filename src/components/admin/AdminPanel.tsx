@@ -103,12 +103,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [panelSizeId, setPanelSizeId] = useState<number>(panelSizes[0]?.id || 1);
   const [panelDecorNumber, setPanelDecorNumber] = useState('');
   const [panelDecorName, setPanelDecorName] = useState('');
+  const [panelNomenclature1C, setPanelNomenclature1C] = useState('');
   const [panelEmbossingId, setPanelEmbossingId] = useState<number>(embossings[0]?.id || 1);
   const [panelThicknessId, setPanelThicknessId] = useState<number>(thicknesses[0]?.id || 1);
-  const [panelPricePerM2, setPanelPricePerM2] = useState<number>(85.0);
   const [panelCurrency, setPanelCurrency] = useState<string>('EUR');
   const [panelIsStock, setPanelIsStock] = useState<boolean>(true);
   const [panelSearch, setPanelSearch] = useState('');
+
+  // Format area calculation helper
+  const getFormatArea = (sizeId: number): number => {
+    const ps = panelSizes.find(s => s.id === sizeId);
+    if (!ps) return 3.965;
+    return ps.volumeM2 || Number(((ps.heightMm * ps.widthMm) / 1000000).toFixed(3));
+  };
+
+  const [panelPricePerM2, setPanelPricePerM2] = useState<number>(85.0);
+  const [panelPricePerSheet, setPanelPricePerSheet] = useState<number>(() => {
+    const initArea = panelSizes[0] ? (panelSizes[0].volumeM2 || Number(((panelSizes[0].heightMm * panelSizes[0].widthMm) / 1000000).toFixed(3))) : 3.965;
+    return Number((85.0 * initArea).toFixed(2));
+  });
+
+  const handlePricePerM2Change = (val: number) => {
+    setPanelPricePerM2(val);
+    const area = getFormatArea(panelSizeId);
+    if (area > 0) {
+      setPanelPricePerSheet(Number((val * area).toFixed(2)));
+    }
+  };
+
+  const handlePricePerSheetChange = (val: number) => {
+    setPanelPricePerSheet(val);
+    const area = getFormatArea(panelSizeId);
+    if (area > 0) {
+      setPanelPricePerM2(Number((val / area).toFixed(2)));
+    }
+  };
+
+  const handlePanelSizeChange = (newSizeId: number) => {
+    setPanelSizeId(newSizeId);
+    const area = getFormatArea(newSizeId);
+    if (area > 0 && panelPricePerM2 > 0) {
+      setPanelPricePerSheet(Number((panelPricePerM2 * area).toFixed(2)));
+    }
+  };
 
   // Thickness form state
   const [newThicknessMm, setNewThicknessMm] = useState<number>(12);
@@ -126,14 +163,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!panelDecorName.trim()) return;
     const selSize = panelSizes.find(ps => ps.id === panelSizeId) || { heightMm: 3050, widthMm: 1300 };
     const selThickness = thicknesses.find(t => t.id === panelThicknessId)?.thickness || 12;
-    const areaM2 = (selSize.heightMm * selSize.widthMm) / 1000000;
-    const priceSheet = Number((areaM2 * panelPricePerM2).toFixed(2));
     const mfg = manufacturers.find(m => m.id === panelMfgId);
 
     onAddDecor({
       name: `${mfg?.fullName || ''} ${panelDecorNumber} ${panelDecorName}`.trim(),
       decorNumber: panelDecorNumber.trim(),
       decorName: panelDecorName.trim(),
+      nomenclature1C: panelNomenclature1C.trim(),
       widthMm: selSize.widthMm,
       heightMm: selSize.heightMm,
       thicknessMm: selThickness,
@@ -142,9 +178,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       panelSizeId: panelSizeId,
       thicknessId: panelThicknessId,
       pricePerM2: panelPricePerM2,
-      pricePerSheet: priceSheet,
+      pricePerSheet: panelPricePerSheet,
       cost: Number((panelPricePerM2 / 1.465).toFixed(2)),
-      costPerSheet: Number((priceSheet / 1.465).toFixed(2)),
+      costPerSheet: Number((panelPricePerSheet / 1.465).toFixed(2)),
       markup: 46.5,
       currency: panelCurrency,
       isStockDecor: panelIsStock,
@@ -154,6 +190,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     setPanelDecorNumber('');
     setPanelDecorName('');
+    setPanelNomenclature1C('');
   };
 
   // Format (Panel Size) form state
@@ -1186,7 +1223,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <label className="block text-xs font-bold text-slate-700 mb-1">Формат листа (Д×Ш мм)</label>
                 <select
                   value={panelSizeId}
-                  onChange={(e) => setPanelSizeId(Number(e.target.value))}
+                  onChange={(e) => handlePanelSizeChange(Number(e.target.value))}
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {panelSizes.map(ps => {
@@ -1221,6 +1258,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setPanelDecorName(e.target.value)}
                   placeholder="Например: Canyon Wood"
                   required
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Nomenclature 1C */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1">Номенклатура (1С)</label>
+                <input
+                  type="text"
+                  value={panelNomenclature1C}
+                  onChange={(e) => setPanelNomenclature1C(e.target.value)}
+                  placeholder="Номенклатурное наименование из 1С..."
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -1262,8 +1311,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   type="number"
                   step="0.01"
                   value={panelPricePerM2}
-                  onChange={(e) => setPanelPricePerM2(Number(e.target.value))}
+                  onChange={(e) => handlePricePerM2Change(Number(e.target.value))}
                   className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Price per Sheet */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Цена за лист ({panelCurrency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={panelPricePerSheet}
+                  onChange={(e) => handlePricePerSheetChange(Number(e.target.value))}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 text-emerald-700 font-bold"
                 />
               </div>
 
@@ -1284,16 +1345,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200 text-xs">
               <div className="flex items-center gap-4 text-slate-700">
-                <span>
-                  Расчетная цена за лист: <strong className="text-emerald-700 text-sm">
-                    {(() => {
-                      const s = panelSizes.find(ps => ps.id === panelSizeId) || { heightMm: 3050, widthMm: 1300 };
-                      const area = (s.heightMm * s.widthMm) / 1000000;
-                      return (area * panelPricePerM2).toFixed(2);
-                    })()} {panelCurrency}
-                  </strong>
+                <span className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-blue-900 font-medium">
+                  Площадь выбранного формата: <strong>{getFormatArea(panelSizeId)} м²</strong> | Авторасчет: <strong>1 м² = {panelPricePerM2} {panelCurrency}</strong> ↔ <strong>1 лист = {panelPricePerSheet} {panelCurrency}</strong>
                 </span>
-                <label className="flex items-center gap-1.5 cursor-pointer font-semibold">
+                <label className="flex items-center gap-1.5 cursor-pointer font-semibold whitespace-nowrap">
                   <input
                     type="checkbox"
                     checked={panelIsStock}
@@ -1306,7 +1361,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-5 rounded-lg shadow transition flex items-center justify-center gap-1.5"
+                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 px-5 rounded-lg shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" /> Добавить панель в базу
               </button>
@@ -1320,7 +1375,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <tr>
                   <th className="py-3 px-3">№</th>
                   <th className="py-3 px-3">Производитель</th>
-                  <th className="py-3 px-3">Декор / Артикул</th>
+                  <th className="py-3 px-3">Номенклатура (1С) / Декор</th>
                   <th className="py-3 px-3">Формат (Д×Ш мм)</th>
                   <th className="py-3 px-3">Тиснение</th>
                   <th className="py-3 px-3">Толщина</th>
@@ -1338,7 +1393,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     return (
                       d.name?.toLowerCase().includes(q) ||
                       d.decorNumber?.toLowerCase().includes(q) ||
-                      d.decorName?.toLowerCase().includes(q)
+                      d.decorName?.toLowerCase().includes(q) ||
+                      d.nomenclature1C?.toLowerCase().includes(q)
                     );
                   })
                   .map((panel, idx) => {
@@ -1356,9 +1412,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </td>
                         <td className="py-2.5 px-3">
                           <div className="font-bold text-slate-900">{panel.decorName || panel.name}</div>
-                          {panel.decorNumber && (
-                            <div className="text-[10px] text-slate-500 font-mono">Арт: {panel.decorNumber}</div>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {panel.decorNumber && (
+                              <span className="text-[10px] text-slate-500 font-mono">Арт: {panel.decorNumber}</span>
+                            )}
+                            {panel.nomenclature1C && (
+                              <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded font-mono">
+                                1С: {panel.nomenclature1C}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2.5 px-3 font-medium text-slate-700">
                           {panel.heightMm} × {panel.widthMm} мм ({area} м²)

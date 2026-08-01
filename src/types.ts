@@ -31,6 +31,7 @@ export interface PanelFormat {
   name: string;
   decorNumber?: string;
   decorName?: string;
+  nomenclature1C?: string;
   widthMm: number;
   heightMm: number;
   thicknessMm?: number;
